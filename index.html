@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ULCARE - AI Diabetic Foot Ulcer Screening System</title>
+    <script>
+function avatarFallback(img) {
+  img.onerror = null;
+  const parts = (img.alt || '?').split(' ').filter(Boolean), ini = ((parts[0] || '?')[0] + ((parts[1] || '')[0] || '')).toUpperCase();
+  img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#ccfbf1"/><text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-family="Arial,sans-serif" font-size="34" font-weight="700" fill="#0f766e">${ini}</text></svg>`);
+}
+</script>
+    <!-- Tailwind CSS CDN: fine for a Streamlit-embedded component (no Node build step available at `streamlit run` time) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF + html2canvas: used to export the result summary as a real PDF (Download Summary button) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- FontAwesome for medical and UI icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ulcare: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            200: '#99f6e4',
+                            300: '#5eead4',
+                            400: '#2dd4bf',
+                            500: '#14b8a6', // Primary Teal
+                            600: '#0d9488',
+                            700: '#0f766e',
+                            800: '#115e59',
+                            900: '#134e4a',
+                            blue: {
+                                500: '#0284c7',
+                                600: '#0284c7',
+                                700: '#0369a1'
+                            }
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .dragover {
+            border-color: #14b8a6 !important;
+            background-color: #f0fdfa !important;
+        }
+        /* Scrolling happens INSIDE this document, not on the outer Streamlit page: the host iframe is
+           kept pinned to the real viewport height (see reportFrame() near the bottom of the script),
+           which is what the mobile sidebar's position:fixed overlay needs to stay correctly on-screen.
+           For that internal scrollbar to actually appear, html/body need a bounded height (100%) —
+           height:auto would make overflow-y:auto inert and any content taller than the iframe would
+           just get silently clipped with no way to reach it. */
+        html {
+            margin: 0;
+            height: 100%;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
+            -webkit-text-size-adjust: 100%;
+        }
+        body {
+            margin: 0;
+            min-height: 100%;
+        }
+        .gradcam-legend { background: linear-gradient(90deg,#00007f,#0000ff,#00ffff,#ffff00,#ff0000,#7f0000); }
+        /* Report template: shared by the Print button (window.print) and the Download button (jsPDF render). Hidden by default. */
+        #print-report { display: none; }
+        #print-report, #print-report.pr-render { color:#111; font: 11pt/1.6 Arial, Helvetica, sans-serif; }
+        #print-report .pr-header { display:flex; justify-content:space-between; align-items:flex-start; gap: 6mm; border-bottom:3px solid #0d9488; padding-bottom:4mm; margin-bottom:6mm; }
+        #print-report .pr-logo { font-size:18pt; font-weight:800; color:#0f172a; }
+        #print-report .pr-logo span { color:#0d9488; }
+        #print-report .pr-tag { display:block; font-size:8pt; color:#64748b; font-weight:600; letter-spacing:.02em; margin-top:1mm; }
+        #print-report .pr-meta { font-size:8.5pt; color:#64748b; text-align:right; line-height:1.5; white-space:nowrap; }
+        #print-report h1 { font-size:18pt; margin:0 0 2mm; color:#0f172a; }
+        #print-report .pr-sub { font-size:10pt; color:#334155; margin:0 0 4mm; }
+        #print-report h2 { font-size:12pt; color:#0f766e; border-bottom:1px solid #cbd5e1; padding-bottom:1.5mm; margin:6mm 0 3mm; }
+        #print-report table { width:100%; border-collapse:collapse; font-size:9.5pt; margin-bottom:1mm; }
+        #print-report th, #print-report td { padding:2mm 2.5mm; border:1px solid #cbd5e1; text-align:left; vertical-align:top; }
+        #print-report th { background:#f0fdfa; width:38%; font-weight:700; color:#0f766e; }
+        #print-report .pr-imgs { display:flex; gap:3mm; flex-wrap:wrap; justify-content:center; margin:3mm 0; }
+        #print-report .pr-imgs figure { margin:0; text-align:center; width:30%; min-width:45mm; }
+        #print-report .pr-imgs img { display:block; width:100%; max-height:55mm; object-fit:cover; border:1px solid #cbd5e1; border-radius:2mm; margin:0 auto; }
+        #print-report .pr-imgs figcaption { font-size:8pt; color:#64748b; margin-top:1.5mm; font-weight:600; }
+        #print-report .pr-disclaimer { margin-top:6mm; padding:3mm; background:#fffbeb; border:1px solid #fcd34d; border-radius:2mm; font-size:9pt; color:#78350f; }
+        #print-report .pr-footer { margin-top:8mm; padding-top:3mm; border-top:1px solid #cbd5e1; font-size:8pt; color:#94a3b8; text-align:center; }
+        @media print { body > * { display:none !important; } #print-report { display:block !important; max-width:760px; margin:0 auto; } }
+        /* Off-screen render target used while jsPDF/html2canvas rasterize the report for the Download button */
+        #print-report.pr-render { display:block; position:fixed; left:-10000px; top:0; width:760px; background:#fff; padding:10mm; }
+        /* ---- Navigation: sidebar drawer for phones/tablets (< 1024px), top bar for desktop ---- */
+        body { padding-bottom: env(safe-area-inset-bottom); }
+        .nav-btn.is-active { color: #0f766e !important; background-color: rgba(240, 253, 250, .9) !important; }
+        .mobile-menu-button { min-width: 42px; min-height: 42px; }
+        .mobile-sidebar {
+            position: fixed; top: 0; bottom: 0; left: 0; z-index: 70;
+            width: 18rem; max-width: 86vw; display: flex; flex-direction: column;
+            background: #fff; box-shadow: 8px 0 30px rgba(15, 23, 42, .22);
+            padding-top: env(safe-area-inset-top);
+            transform: translateX(-104%); visibility: hidden;
+            transition: transform .25s ease, visibility 0s linear .25s;
+        }
+        .mobile-sidebar.is-open { transform: none; visibility: visible; transition: transform .25s ease, visibility 0s; }
+        .sidebar-backdrop {
+            position: fixed; inset: 0; z-index: 65; background: rgba(15, 23, 42, .5);
+            opacity: 0; pointer-events: none; transition: opacity .25s ease;
+        }
+        .sidebar-backdrop.is-open { opacity: 1; pointer-events: auto; }
+        .side-item {
+            display: flex; align-items: center; width: 100%; text-align: left;
+            padding: .85rem 1rem; border-radius: .85rem; font-size: .92rem; font-weight: 600; color: #334155;
+        }
+        .side-item i { width: 1.9rem; color: #64748b; }
+        .side-item:hover { background: #f8fafc; }
+        .side-item.is-active { color: #0f766e; background: #f0fdfa; box-shadow: inset 3px 0 0 #14b8a6; }
+        .side-item.is-active i { color: #0d9488; }
+        @media (min-width: 1024px) { .mobile-sidebar, .sidebar-backdrop { display: none !important; } }
+        @media (max-width: 1279px) { .brand-version, .brand-subtitle { display: none; } }
+        /* Anchors never hide under the sticky header. */
+        #results-section, #photo-upload-guide { scroll-margin-top: 84px; }
+        .xai-cbar { background: linear-gradient(90deg, #00007f, #0000ff, #00ffff, #ffff00, #ff0000, #7f0000); }
+        .xai-img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: .75rem; border: 1px solid #e2e8f0; background: #f1f5f9; display: block; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased selection:bg-teal-100 selection:text-teal-900">
+
+    <header id="app-header" class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+                <!-- Phones/tablets: opens the sidebar -->
+                <button id="mobile-menu-button" type="button" onclick="openSidebar()" aria-controls="mobile-sidebar" aria-expanded="false" aria-label="Menu" class="mobile-menu-button lg:hidden inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100 flex-shrink-0">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <!-- Brand Logo & Title -->
+                <div class="flex items-center space-x-2 sm:space-x-3 cursor-pointer min-w-0" onclick="switchTab('dashboard')">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-tr from-teal-600 via-teal-500 to-sky-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20 flex-shrink-0">
+                        <i class="fa-solid fa-notes-medical text-xl sm:text-2xl"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900">UL<span class="text-teal-600">CARE</span></span>
+                            <span class="brand-version bg-teal-50 text-teal-700 text-xs font-semibold px-2 py-0.5 rounded-full border border-teal-200">v2.4 Clinical System</span>
+                        </div>
+                        <p class="brand-subtitle text-xs text-slate-500 font-medium">Diabetic Foot Ulcer (DFU) Screening Tool</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Desktop navigation (>= 1024px) -->
+            <nav class="hidden lg:flex items-center space-x-1" aria-label="Main navigation">
+                <button type="button" data-nav="dashboard" onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn is-active px-3 xl:px-4 py-2 rounded-lg text-sm font-semibold transition-all text-slate-600 hover:text-teal-600 hover:bg-slate-50">
+                    <i class="fa-solid fa-chart-pie mr-2"></i>Dashboard
+                </button>
+                <button type="button" data-nav="analyzer" onclick="switchTab('analyzer')" id="nav-analyzer" class="nav-btn px-3 xl:px-4 py-2 rounded-lg text-sm font-semibold transition-all text-slate-600 hover:text-teal-600 hover:bg-slate-50">
+                    <i class="fa-solid fa-microscope mr-2"></i>AI Scan Tool
+                </button>
+                <button type="button" data-nav="education" onclick="switchTab('education')" id="nav-education" class="nav-btn px-3 xl:px-4 py-2 rounded-lg text-sm font-semibold transition-all text-slate-600 hover:text-teal-600 hover:bg-slate-50">
+                    <i class="fa-solid fa-book-medical mr-2"></i>Edukasi & Info
+                </button>
+                <button type="button" data-nav="team" onclick="switchTab('team')" id="nav-team" class="nav-btn px-3 xl:px-4 py-2 rounded-lg text-sm font-semibold transition-all text-slate-600 hover:text-teal-600 hover:bg-slate-50">
+                    <i class="fa-solid fa-graduation-cap mr-2"></i>TIM WISPO 3
+                </button>
+            </nav>
+
+            <!-- Header Right Action -->
+            <div class="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
+                <div class="relative inline-block text-left">
+                    <select id="lang-select" onchange="changeLanguage(this.value)" aria-label="Language" class="bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold rounded-xl px-2 sm:px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:outline-none cursor-pointer">
+                        <option value="id">🇮🇩 Indonesia</option>
+                        <option value="en">🇬🇧 English</option>
+                    </select>
+                </div>
+                <button type="button" onclick="openNewAssessment();" class="hidden xl:inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm shadow-sm shadow-teal-600/30 transition-all">
+                    <i class="fa-solid fa-camera mr-2"></i>Assessment Baru
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sidebar drawer (phones & tablets) -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+    <aside id="mobile-sidebar" class="mobile-sidebar" role="dialog" aria-modal="true" aria-label="Menu" aria-hidden="true">
+        <div class="flex items-center justify-between gap-3 px-4 h-16 border-b border-slate-200 flex-shrink-0">
+            <div class="flex items-center space-x-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 via-teal-500 to-sky-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20 flex-shrink-0">
+                    <i class="fa-solid fa-notes-medical text-xl"></i>
+                </div>
+                <span class="text-xl font-extrabold tracking-tight text-slate-900">UL<span class="text-teal-600">CARE</span></span>
+            </div>
+            <button id="sidebar-close" type="button" onclick="closeSidebar()" aria-label="Menu" class="mobile-menu-button inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 flex-shrink-0">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        <nav class="flex-1 overflow-y-auto p-3 space-y-1" aria-label="Mobile navigation">
+            <button type="button" data-nav="dashboard" onclick="switchTab('dashboard')" class="nav-btn side-item is-active"><i class="fa-solid fa-chart-pie"></i>Dashboard</button>
+            <button type="button" data-nav="analyzer" onclick="switchTab('analyzer')" class="nav-btn side-item"><i class="fa-solid fa-microscope"></i>AI Scan Tool</button>
+            <button type="button" data-nav="education" onclick="switchTab('education')" class="nav-btn side-item"><i class="fa-solid fa-book-medical"></i>Edukasi & Info</button>
+            <button type="button" data-nav="team" onclick="switchTab('team')" class="nav-btn side-item"><i class="fa-solid fa-graduation-cap"></i>TIM WISPO 3</button>
+        </nav>
+        <div class="p-3 border-t border-slate-200 flex-shrink-0">
+            <button type="button" onclick="openNewAssessment()" class="w-full px-4 py-3 rounded-xl bg-teal-600 active:bg-teal-700 text-left text-sm font-semibold text-white"><i class="fa-solid fa-camera w-7"></i>Assessment Baru</button>
+        </div>
+    </aside>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- DASHBOARD TAB -->
+        <div id="tab-content-dashboard" class="space-y-8">
+            <!-- Hero Banner with DIRECT UPLOAD AREA -->
+            <div class="bg-gradient-to-r from-teal-900 via-teal-800 to-sky-900 rounded-3xl p-6 sm:p-10 text-white shadow-xl relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                    
+                    <!-- Left: Hero Information Text & Disclaimer Banner -->
+                    <div class="lg:col-span-6 space-y-4">
+                        <span class="bg-teal-500/30 text-teal-200 text-xs font-semibold px-3 py-1 rounded-full border border-teal-400/30 uppercase tracking-wider">AI Health Assistant</span>
+                        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight">Smart Diabetic Foot Ulcer (DFU) Grading & Analysis</h1>
+                        <p class="text-teal-100 text-sm sm:text-base leading-relaxed">
+                            An easy-to-use self-assessment tool designed for rapid diabetic foot ulcer image screening, Wagner stage classification, and immediate next-step guidance.
+                        </p>
+                        
+                        <!-- Disclaimer Callout inside Hero -->
+                        <div class="bg-teal-950/60 border border-teal-400/30 rounded-2xl p-4 text-xs text-teal-200 flex items-start space-x-3 backdrop-blur-xs">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-400 text-lg flex-shrink-0 mt-0.5"></i>
+                            <div>
+                                <strong class="text-white block font-semibold mb-0.5">Penting (Disclaimer Medis):</strong>
+                                <span lang-key="hero-disclaimer">Alat ini berfungsi sebagai SUPPORT untuk screening dini mandiri, BUKAN pengganti diagnosis medis resmi dari dokter/tenaga medis profesional.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Direct File Upload Zone inside Dashboard Hero -->
+                    <div class="lg:col-span-6">
+                        <div class="bg-white/95 text-slate-800 rounded-2xl p-6 shadow-2xl backdrop-blur-sm border border-white/20 space-y-4">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                                <h3 class="font-extrabold text-sm text-slate-900 flex items-center">
+                                    <i class="fa-solid fa-upload text-teal-600 mr-2"></i>Upload Foto Luka untuk Scan
+                                </h3>
+                                <span class="text-[11px] font-semibold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">Langsung Buka Scan</span>
+                            </div>
+
+                            <!-- Interactive Dropzone -->
+                            <div id="hero-drop-zone" class="border-2 border-dashed border-teal-300 hover:border-teal-500 rounded-xl p-6 text-center bg-teal-50/40 hover:bg-teal-50 transition-all cursor-pointer relative group">
+                                <input type="file" id="hero-file-input" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="handleHeroFileSelect(event)">
+                                <div class="space-y-2">
+                                    <div class="w-12 h-12 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center mx-auto text-xl group-hover:scale-110 transition-transform">
+                                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                                    </div>
+                                    <p class="text-sm font-bold text-slate-800">Drag & Drop atau Klik untuk Upload Foto Luka</p>
+                                    <p class="text-xs text-slate-500">Mendukung format JPG, PNG. Gambar langsung diproses.</p>
+                                </div>
+                            </div>
+
+                            <!-- Help Link directly under Hover/Upload Area -->
+                            <div class="text-center pt-1">
+                                <button type="button" onclick="switchTab('education'); scrollToGuide();" class="text-xs font-semibold text-teal-700 hover:text-teal-900 hover:underline inline-flex items-center">
+                                    <i class="fa-solid fa-circle-question mr-1.5 text-teal-600"></i>
+                                    <span>Needs help on how to upload a good photo?</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Dashboard System Metrics Grid -->
+            <div>
+                <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <h2 class="text-xl font-bold text-slate-900 flex items-center">
+                        <i class="fa-solid fa-chart-line text-teal-600 mr-2"></i>System Performance Metrics
+                    </h2>
+                    <div class="flex items-center flex-wrap gap-2">
+                        <span class="text-xs font-medium text-slate-500">OOF evaluation: 500 diabetic foot ulcer images</span>
+                        <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200"><i class="fa-solid fa-microchip text-slate-400"></i>Model: ULCARE_V3.keras · 18.188 KB</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500 text-sm font-medium">Diagnostic Accuracy</span>
+                            <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
+                                <i class="fa-solid fa-bullseye text-lg"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex items-baseline">
+                            <span class="text-3xl font-extrabold text-slate-900">77.4%</span>
+                            <span class="ml-2 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">OOF evaluation</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2">Overall accuracy from the supplied OOF confusion matrix</p>
+                    </div>
+
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500 text-sm font-medium">Sensitivity (Recall)</span>
+                            <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
+                                <i class="fa-solid fa-shield-heart text-lg"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex items-baseline">
+                            <span class="text-3xl font-extrabold text-slate-900">77.4%</span>
+                            <span class="ml-2 text-xs font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full">High Recall</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2">Macro-average recall across Wagner Grades 0–4</p>
+                    </div>
+
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500 text-sm font-medium">Specificity Rate</span>
+                            <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
+                                <i class="fa-solid fa-filter text-lg"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex items-baseline">
+                            <span class="text-3xl font-extrabold text-slate-900">77.3%</span>
+                            <span class="ml-2 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Robust</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2">Macro-average precision across Wagner Grades 0–4</p>
+                    </div>
+
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500 text-sm font-medium">Avg. Inference Time</span>
+                            <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                <i class="fa-solid fa-bolt text-lg"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex items-baseline">
+                            <span class="text-3xl font-extrabold text-slate-900">500</span>
+                            <span class="ml-2 text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Real-time</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2">Images in the supplied out-of-fold confusion matrix</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FAQ Section -->
+            <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
+                <div class="border-b border-slate-100 pb-4">
+                    <span class="bg-teal-50 text-teal-700 text-xs font-extrabold px-3 py-1 rounded-full border border-teal-200 uppercase tracking-wider">FAQ</span>
+                    <h3 class="text-2xl font-extrabold text-slate-900 mt-2">Pertanyaan Sering Diajukan</h3>
+                    <p class="text-xs text-slate-500 mt-1">Panduan Wagner Grade 0–4, batasan AI, dan langkah tindak lanjut yang aman.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-slate-700 text-xs leading-relaxed">
+                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-2">
+                        <h4 class="font-bold text-sm text-slate-900 flex items-center">
+                            <i class="fa-solid fa-circle-question text-teal-600 mr-2"></i>Apa itu Diabetic Foot Ulcer (DFU)?
+                        </h4>
+                        <p>Diabetic Foot Ulcer (DFU) adalah luka kronis pada kaki penderita diabetes. Neuropati dan gangguan aliran darah dapat membuat luka tidak disadari, sulit sembuh, dan berkembang menjadi infeksi atau gangren.</p>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-2">
+                        <h4 class="font-bold text-sm text-slate-900 flex items-center">
+                            <i class="fa-solid fa-microscope text-teal-600 mr-2"></i>Seberapa akurat analisis AI ULCARE?
+                        </h4>
+                        <p>Pada evaluasi out-of-fold 500 foto yang diberikan, akurasi keseluruhan adalah 77,4%, macro recall 77,4%, dan macro precision 77,3%. Hasil per foto bukan diagnosis dan tingkat keyakinan model bukan kepastian klinis.</p>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-2">
+                        <h4 class="font-bold text-sm text-slate-900 flex items-center">
+                            <i class="fa-solid fa-hospital-user text-teal-600 mr-2"></i>Apa yang harus dilakukan jika hasil analisis menunjukkan Stage 3 atau Stage 4?
+                        </h4>
+                        <p>Cari penilaian medis segera. Grade 3 dapat menunjukkan abses, osteomielitis, atau infeksi dalam; Grade 4 menunjukkan gangren lokal pada jari/forefoot. Keduanya memerlukan evaluasi segera oleh tim klinis.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- AI SCAN TOOL TAB -->
+        <div id="tab-content-analyzer" class="space-y-8 hidden">
+            <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm">
+                <div class="border-b border-slate-100 pb-5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <span class="bg-teal-50 text-teal-700 text-xs font-extrabold px-3 py-1 rounded-full border border-teal-200 uppercase tracking-wider">AI Detection Tool</span>
+                        <h2 class="text-2xl font-extrabold text-slate-900 mt-2">Wound Image Assessment</h2>
+                        <p class="text-xs text-slate-500 mt-1">Upload or drag and drop a clear image of your diabetic foot wound for instant Wagner stage classification.</p>
+                    </div>
+                    <button onclick="switchTab('dashboard')" class="text-xs font-bold text-slate-600 hover:text-teal-600 bg-slate-100 px-4 py-2 rounded-xl flex items-center w-max">
+                        <i class="fa-solid fa-arrow-left mr-2"></i>Kembali ke Dashboard
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <!-- Left: Upload & Input Panel -->
+                    <div class="lg:col-span-5 space-y-6">
+                        <!-- User Identifier -->
+                        <div class="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200/80">
+                            <h3 class="text-sm font-bold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-user-circle text-teal-600 mr-2"></i>Assessment Identifier (Optional)
+                            </h3>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Your Name / Assessment Label</label>
+                                <input type="text" id="patient-name" placeholder="e.g. My Foot Scan Assessment" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-teal-500 focus:outline-none bg-white">
+                            </div>
+                        </div>
+
+                        <!-- Drag and Drop Upload Area -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-2">Ulcer Image Upload</label>
+                            <div id="drop-zone" class="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center hover:border-teal-500 transition-all bg-slate-50/50 relative cursor-pointer group">
+                                <input type="file" id="file-input" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="handleFileSelect(event)">
+                                
+                                <div id="upload-prompt" class="space-y-3">
+                                    <div class="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto text-xl group-hover:scale-110 transition-transform border border-teal-100">
+                                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-bold text-slate-800">Drag & Drop Image Here</p>
+                                        <p class="text-xs text-slate-400 mt-1">or click to browse local files (JPG, PNG)</p>
+                                    </div>
+                                </div>
+
+                                <div id="preview-container" class="hidden relative z-20">
+                                    <img id="image-preview" src="" alt="Wound Preview" class="max-h-56 mx-auto rounded-xl object-contain border border-slate-200 shadow-sm">
+                                    <button type="button" onclick="resetUpload(event)" class="mt-3 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg transition-all border border-rose-200">
+                                        <i class="fa-solid fa-trash mr-1.5"></i>Remove Image
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- Link to Education Upload Guide -->
+                            <div class="text-center mt-2">
+                                <button type="button" onclick="switchTab('education'); scrollToGuide();" class="text-xs text-teal-600 hover:text-teal-800 font-semibold hover:underline inline-flex items-center">
+                                    <i class="fa-solid fa-circle-info mr-1"></i>Needs help on how to upload a good photo?
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Analyze Action Button -->
+                        <button type="button" id="analyze-btn" onclick="runAnalysis()" class="w-full py-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md shadow-teal-600/20 transition-all flex items-center justify-center"><i id="analyze-icon" class="fa-solid fa-microscope mr-2"></i><span id="analyze-label" data-dyn></span></button>
+                    </div>
+
+                    <!-- Right: Analysis & Findings Output -->
+                    <div class="lg:col-span-7">
+                        <div id="results-section" class="hidden space-y-6 animate-in fade-in duration-300">
+                            <!-- Wagner stage summary -->
+                            <div id="stage-card" class="p-6 rounded-2xl border bg-slate-50 border-slate-200 text-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div class="space-y-1 text-center sm:text-left">
+                                    <span id="stage-badge" data-dyn class="text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider bg-slate-200 text-slate-800"></span>
+                                    <h3 id="stage-title" data-dyn class="text-3xl font-black mt-2"></h3>
+                                    <p id="stage-name" data-dyn class="text-sm font-bold"></p>
+                                    <p id="stage-desc" data-dyn class="text-xs font-medium text-slate-600 leading-relaxed"></p>
+                                </div>
+                                <div class="text-center sm:text-right bg-white/80 p-4 rounded-2xl border border-slate-200/60 shadow-xs min-w-[130px]">
+                                    <span class="text-xs text-slate-500 font-bold uppercase block">AI Confidence</span>
+                                    <span id="stage-confidence" data-dyn class="text-3xl font-black"></span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                                <section class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+                                    <h4 class="text-sm font-bold text-slate-900 flex items-center"><span class="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center mr-2"><i class="fa-solid fa-arrow-trend-up"></i></span><span id="stage-reason-title" data-dyn></span></h4>
+                                    <p id="finding-reason" data-dyn class="mt-4 text-sm text-slate-600 leading-relaxed"></p>
+                                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center text-xs font-semibold text-teal-700"><i class="fa-solid fa-circle-info mr-2"></i>Area yang disorot pada Grad-CAM menjadi dasar prediksi ini.</div>
+                                </section>
+                                <section class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+                                    <h4 class="text-sm font-bold text-slate-900 flex items-center mb-4"><span class="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center mr-2"><i class="fa-solid fa-chart-simple"></i></span><span class="leading-tight">Probabilitas setiap stage<span id="prob-note" data-dyn class="block text-[10px] font-semibold text-slate-400 mt-0.5"></span></span></h4>
+                                    <div id="stage-probabilities" data-dyn class="space-y-3 text-xs"></div>
+                                </section>
+                                <section class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs xl:col-span-2">
+                                    <h4 id="clinical-details-title" data-dyn class="text-sm font-bold text-slate-900"></h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 text-xs leading-relaxed">
+                                        <div><strong id="clinical-presentation-label" data-dyn></strong><p id="clinical-presentation" class="mt-1 text-slate-600"></p></div>
+                                        <div><strong id="clinical-intervention-label" data-dyn></strong><p id="clinical-intervention" class="mt-1 text-slate-600"></p></div>
+                                        <div><strong id="clinical-evidence-label" data-dyn></strong><p id="clinical-evidence" class="mt-1 text-slate-600"></p></div>
+                                    </div>
+                                </section>
+                            </div>
+
+                            <!-- Grad-CAM++ generated by the trained model (same layout as the Colab output) -->
+                            <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200">
+                                <div class="flex items-center justify-between gap-x-3 gap-y-1 mb-3 flex-wrap"><h4 class="text-xs font-bold text-slate-700"><i class="fa-solid fa-bullseye text-rose-500 mr-1.5"></i>Grad-CAM Attention Map</h4><span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Dihasilkan langsung dari model</span></div>
+                                <div class="text-center mb-4">
+                                    <p id="xai-title" data-dyn class="text-sm font-bold text-slate-900"></p>
+                                    <p id="xai-class" data-dyn class="text-xs font-semibold text-slate-500"></p>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 items-start">
+                                    <figure class="min-w-0">
+                                        <figcaption class="text-xs font-semibold text-slate-700 text-center mb-1.5">Foto</figcaption>
+                                        <img id="xai-photo" src="" alt="Wound Preview" class="xai-img">
+                                    </figure>
+                                    <figure class="min-w-0">
+                                        <figcaption class="text-xs font-semibold text-slate-700 text-center mb-1.5">Peta aktivasi</figcaption>
+                                        <img id="xai-heat" src="" alt="Peta aktivasi" class="xai-img">
+                                        <div class="mt-2 flex items-center gap-1.5 text-[10px] font-medium text-slate-500 leading-none">
+                                            <span>rendah</span><div class="xai-cbar h-2 flex-1 rounded-full"></div><span>tinggi</span>
+                                        </div>
+                                    </figure>
+                                    <figure class="min-w-0 col-span-2 sm:col-span-1">
+                                        <figcaption class="text-xs font-semibold text-slate-700 text-center mb-1.5">Overlay + kontur 50% / 75%</figcaption>
+                                        <img id="result-img" src="" alt="Grad-CAM" class="xai-img">
+                                        <div class="mt-2 flex items-center justify-center gap-4 text-[10px] font-semibold text-slate-500">
+                                            <span class="inline-flex items-center"><span class="inline-block w-5 border-t-2 border-slate-900 mr-1.5"></span>75%</span>
+                                            <span class="inline-flex items-center"><span class="inline-block w-5 border-t-2 border-dashed border-slate-400 mr-1.5"></span>50%</span>
+                                        </div>
+                                    </figure>
+                                </div>
+                                <p class="mt-4 text-xs text-slate-500 leading-relaxed">Warna hangat (merah–kuning) menandai area foto yang paling memengaruhi keputusan model. Ini adalah penjelasan visual, bukan batas luka yang dipetakan.</p>
+                                <p class="mt-2 text-[11px] text-slate-400 leading-relaxed">Foto ditampilkan sesuai masukan model (persegi 224×224). Kontur putih putus-putus menandai area ≥50% aktivasi, kontur hitam area ≥75%.</p>
+                                <button type="button" onclick="downloadFigure()" class="mt-3 w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all inline-flex items-center justify-center"><i class="fa-solid fa-image mr-2"></i>Unduh Figur Grad-CAM++ (PNG)</button>
+                            </div>
+
+                            <!-- Placeholder ready for a clinician-authored suggestion -->
+                            <div class="bg-teal-50/80 border border-teal-200 rounded-2xl p-5 text-teal-900 space-y-2">
+                                <h4 class="text-sm font-bold flex items-center text-teal-800">
+                                    <i class="fa-solid fa-user-doctor mr-2"></i>Saran Klinis
+                                </h4>
+                                <p id="recommendation-text" class="text-xs leading-relaxed text-teal-800">
+                                    Gunakan hasil ini hanya sebagai skrining. Tindakan yang disarankan ditampilkan berdasarkan Wagner Grade dan tetap harus ditentukan oleh tenaga kesehatan berlisensi.
+                                </p>
+                            </div>
+
+                            <!-- Action Buttons: PRINT + DOWNLOAD (PDF) -->
+                            <div class="flex flex-wrap gap-3 pt-2">
+                                <button onclick="printReport()" class="w-full sm:w-auto px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center">
+                                    <i class="fa-solid fa-print mr-2"></i>Print Result Summary
+                                </button>
+                                <button onclick="downloadReport()" class="w-full sm:w-auto px-6 py-3 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center">
+                                    <i class="fa-solid fa-file-pdf mr-2"></i>Download Summary (PDF)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Initial Empty State Placeholder -->
+                        <div id="empty-state" class="border border-dashed border-slate-200 rounded-3xl p-12 text-center bg-slate-50/40 flex flex-col items-center justify-center min-h-[380px]">
+                            <div class="w-16 h-16 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center text-2xl mb-4 border border-teal-100 shadow-xs">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            </div>
+                            <h3 class="text-base font-bold text-slate-800">Awaiting Image Analysis</h3>
+                            <p class="text-xs text-slate-400 max-w-sm mt-1.5 leading-relaxed">
+                                Upload a diabetic foot wound image and click "Run AI Stage Analysis" to see the predicted Wagner stage and its Grad-CAM.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DFU EDUCATION TAB -->
+        <div id="tab-content-education" class="space-y-8 hidden">
+            <div class="bg-gradient-to-r from-teal-900 via-teal-800 to-sky-900 rounded-3xl p-8 text-white shadow-xl"><span class="bg-teal-500/30 text-teal-200 text-xs font-semibold px-3 py-1 rounded-full border border-teal-400/30 uppercase tracking-wider">DFU Education</span><h1 data-t="dfu-hero" class="text-3xl font-extrabold mt-3"></h1><p data-t="dfu-hero-copy" class="text-teal-100 mt-2 text-sm leading-relaxed max-w-3xl"></p></div>
+            <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 text-amber-950 flex items-start space-x-4 shadow-xs"><i class="fa-solid fa-triangle-exclamation text-amber-600 text-2xl flex-shrink-0 mt-1"></i><div class="space-y-1"><h3 data-t="dfu-disclaimer-title" class="font-bold text-sm uppercase text-amber-900"></h3><p data-t="edu-disclaimer" class="text-xs leading-relaxed text-amber-900"></p></div></div>
+            <section class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-5"><div class="border-b border-slate-100 pb-4"><span class="bg-teal-50 text-teal-700 text-xs font-bold px-3 py-1 rounded-full border border-teal-200 uppercase">DFU</span><h2 data-t="dfu-what" class="text-2xl font-extrabold text-slate-900 mt-2"></h2><div data-t="dfu-what-copy" class="text-sm text-slate-600 mt-3 leading-relaxed max-w-4xl"></div></div><p data-t="dfu-what-source" class="text-xs text-slate-500"></p></section>
+            <section class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-5"><div class="border-b border-slate-100 pb-4"><h2 data-t="dfu-wagner" class="text-2xl font-extrabold text-slate-900"></h2><p data-t="dfu-wagner-copy" class="text-sm text-slate-600 mt-2 leading-relaxed"></p></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"><article data-t="dfu-g0" class="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-xs leading-relaxed"></article><article data-t="dfu-g1" class="p-4 rounded-2xl bg-sky-50/70 border border-sky-200 text-xs leading-relaxed"></article><article data-t="dfu-g2" class="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs leading-relaxed"></article><article data-t="dfu-g3" class="p-4 rounded-2xl bg-orange-50/70 border border-orange-200 text-xs leading-relaxed"></article><article data-t="dfu-g4" class="p-4 rounded-2xl bg-rose-50/70 border border-rose-200 text-xs leading-relaxed"></article><article data-t="dfu-g5" class="p-4 rounded-2xl bg-rose-100/70 border border-rose-300 text-xs leading-relaxed"></article></div><p data-t="dfu-scope" class="text-xs text-slate-600 rounded-xl bg-slate-50 border border-slate-200 p-4"></p></section>
+            <section class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-5"><div class="flex items-center space-x-3 text-rose-600 border-b border-slate-100 pb-3"><i class="fa-solid fa-triangle-exclamation text-2xl"></i><h2 data-t="dfu-alert" class="text-xl font-bold text-slate-900"></h2></div><p data-t="dfu-alert-intro" class="text-sm text-slate-600 leading-relaxed"></p><div class="grid grid-cols-1 lg:grid-cols-2 gap-5"><article class="rounded-2xl border border-rose-200 bg-rose-50/60 p-5"><h3 data-t="dfu-urgent" class="font-bold text-rose-900"></h3><div data-t="dfu-urgent-copy" class="mt-3 text-xs leading-relaxed text-slate-700"></div></article><article class="rounded-2xl border border-amber-200 bg-amber-50/60 p-5"><h3 data-t="dfu-soon" class="font-bold text-amber-900"></h3><div data-t="dfu-soon-copy" class="mt-3 text-xs leading-relaxed text-slate-700"></div></article></div><p data-t="dfu-alert-note" class="text-xs leading-relaxed text-slate-600"></p></section>
+            <section id="photo-upload-guide" class="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-md space-y-6"><div class="border-b border-slate-800 pb-4"><span class="bg-teal-500/20 text-teal-300 text-xs font-bold px-3 py-1 rounded-full border border-teal-500/30 uppercase">Photo guide</span><h3 data-t="dfu-photo" class="text-2xl font-extrabold mt-2"></h3><p data-t="dfu-photo-copy" class="text-xs text-slate-300 mt-1"></p></div><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 text-xs"><div data-t="dfu-p1" class="bg-slate-800/80 p-5 rounded-2xl border border-slate-700 space-y-2"></div><div data-t="dfu-p2" class="bg-slate-800/80 p-5 rounded-2xl border border-slate-700 space-y-2"></div><div data-t="dfu-p3" class="bg-slate-800/80 p-5 rounded-2xl border border-slate-700 space-y-2"></div><div data-t="dfu-p4" class="bg-slate-800/80 p-5 rounded-2xl border border-slate-700 space-y-2"></div></div></section>
+            <section class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs"><h2 data-t="dfu-refs-title" class="text-xl font-bold text-slate-900"></h2><div data-t="dfu-refs" class="mt-4 text-xs leading-relaxed text-slate-600"></div></section>
+        </div>
+        <!-- TEAM TAB -->
+        <div id="tab-content-team" class="space-y-8 hidden">
+            <!-- Team Hero Banner -->
+            <div class="bg-gradient-to-r from-teal-900 via-teal-800 to-sky-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="relative z-10 max-w-2xl">
+                    <span class="bg-teal-500/30 text-teal-200 text-xs font-semibold px-3 py-1 rounded-full border border-teal-400/30 uppercase tracking-wider">Research Team Profile</span>
+                    <h1 class="text-3xl sm:text-4xl font-extrabold mt-3 tracking-tight">TIM WISPO 3</h1>
+                    <p class="text-xl font-semibold text-teal-300 mt-1">SMA BRAWIJAYA SMART SCHOOL</p>
+                    <p data-t="team-intro" class="text-teal-100 mt-3 text-sm sm:text-base leading-relaxed">
+                        Developers and researchers behind <strong>"ULCARE: AI Web Application for Diabetic Foot Ulcer Screening"</strong>.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Team Members Grid -->
+            <div>
+                <h3 class="text-xl font-bold text-slate-900 mb-6 flex items-center">
+                    <i class="fa-solid fa-users text-teal-600 mr-2"></i>Project Research Members
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs hover:shadow-lg transition-all text-center flex flex-col items-center group">
+                        <img onerror="avatarFallback(this)" src="assets/team/sangsthita.jpeg" alt="Sangsthita Earlene Cintanugraha" class="w-24 h-24 rounded-2xl object-cover object-top shadow-md mb-4 group-hover:scale-105 transition-transform">
+                        <h4 class="text-base font-bold text-slate-900">Sangsthita Earlene Cintanugraha</h4>
+                        <span data-t="role-lead" class="text-xs font-semibold text-teal-600 bg-teal-50 px-2.5 py-0.5 rounded-full mt-1 border border-teal-200"></span>
+                        <p data-t="bio-lead" class="text-xs text-slate-500 mt-3 leading-relaxed"></p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs hover:shadow-lg transition-all text-center flex flex-col items-center group">
+                        <img onerror="avatarFallback(this)" src="assets/team/haura.jpeg" alt="Haura Muafa" class="w-24 h-24 rounded-2xl object-cover object-top shadow-md mb-4 group-hover:scale-105 transition-transform">
+                        <h4 class="text-base font-bold text-slate-900">Haura Muafa</h4>
+                        <span data-t="role-programmer" class="text-xs font-semibold text-sky-600 bg-sky-50 px-2.5 py-0.5 rounded-full mt-1 border border-sky-200"></span>
+                        <p data-t="bio-programmer" class="text-xs text-slate-500 mt-3 leading-relaxed"></p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs hover:shadow-lg transition-all text-center flex flex-col items-center group">
+                        <img onerror="avatarFallback(this)" src="assets/team/elmirana.jpeg" alt="Elmirana Febrina Sari" class="w-24 h-24 rounded-2xl object-cover object-top shadow-md mb-4 group-hover:scale-105 transition-transform">
+                        <h4 class="text-base font-bold text-slate-900">Elmirana Febrina Sari</h4>
+                        <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full mt-1 border border-indigo-200" data-t="role-assistant"></span>
+                        <p data-t="bio-assistant" class="text-xs text-slate-500 mt-3 leading-relaxed"></p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs hover:shadow-lg transition-all text-center flex flex-col items-center group">
+                        <img onerror="avatarFallback(this)" src="assets/team/vania-beby.jpeg" alt="Vania Beby Setyawati" class="w-24 h-24 rounded-2xl object-cover object-top shadow-md mb-4 group-hover:scale-105 transition-transform">
+                        <h4 class="text-base font-bold text-slate-900">Vania Beby Setyawati</h4>
+                        <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full mt-1 border border-indigo-200" data-t="role-assistant"></span>
+                        <p data-t="bio-assistant" class="text-xs text-slate-500 mt-3 leading-relaxed"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- School & Affiliation Details -->
+            <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center space-x-4">
+                    <div class="w-16 h-16 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center text-3xl font-bold border border-teal-200 shadow-inner">
+                        <i class="fa-solid fa-school"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-bold text-slate-900">SMA Brawijaya Smart School</h4>
+                        <p class="text-xs text-slate-500 mt-0.5">High School Scientific Research & Innovation Program • Malang, Indonesia</p>
+                    </div>
+                </div>
+                <button onclick="switchTab('analyzer')" class="px-6 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-sm transition-all whitespace-nowrap">
+                    Test ULCARE AI Tool <i class="fa-solid fa-arrow-right ml-2"></i>
+                </button>
+            </div>
+        </div>
+
+    </main>
+    <article id="print-report" aria-hidden="true"></article>
+
+    <!-- Notification Modal -->
+    <div id="notification-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in duration-200">
+            <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-xl font-bold">
+                <i id="modal-icon" class="fa-solid fa-circle-info"></i>
+            </div>
+            <div>
+                <h4 id="modal-title" data-dyn class="text-lg font-bold text-slate-900">Notification</h4>
+                <p id="modal-message" data-dyn class="text-xs text-slate-600 mt-1 leading-relaxed">Message content goes here.</p>
+            </div>
+            <div class="flex justify-end pt-2">
+                <button onclick="closeModal()" class="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition-all">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+<script>
+'use strict';
+/* ULCARE front-end. Talks to app.py through the Streamlit custom-component protocol. */
+const $ = (id) => document.getElementById(id);
+const MAX_SIDE = 768, TIMEOUT_MS = 120000, SLOW_MS = 6000;
+const MODEL_NAME = 'ULCARE_V3.keras', MODEL_SIZE = '18.188 KB';
+const state = { lang: 'id', image: null, result: null, reqId: null, applied: null, busy: false, slow: false, tab: 'dashboard', t1: null, t2: null };
+try { state.lang = localStorage.getItem('ulcare-lang') === 'en' ? 'en' : 'id'; } catch (e) { /* storage blocked */ }
+
+/* ---------- static text: [Indonesia, English]. Every visible string must be listed here ---------- */
+const PAIRS = [
+  ['Sistem Klinis v2.4', 'v2.4 Clinical System'],
+  ['Alat Skrining Diabetic Foot Ulcer (DFU)', 'Diabetic Foot Ulcer (DFU) Screening Tool'],
+  ['Alat Pindai AI', 'AI Scan Tool'],
+  ['Edukasi & Info', 'Education & Info'],
+  ['Assessment Baru', 'New Assessment'],
+  ['Menu', 'Menu'],
+  ['Asisten Kesehatan AI', 'AI Health Assistant'],
+  ['Analisis & Klasifikasi Pintar Luka Kaki Diabetes', 'Smart Diabetic Foot Ulcer (DFU) Grading & Analysis'],
+  ['Alat penilaian mandiri yang mudah digunakan untuk skrining cepat citra ulkus kaki diabetik, klasifikasi Wagner stage, dan panduan langkah selanjutnya.', 'An easy-to-use self-assessment tool designed for rapid diabetic foot ulcer image screening, Wagner stage classification, and immediate next-step guidance.'],
+  ['Penting (Disclaimer Medis):', 'Important (Medical Disclaimer):'],
+  ['Alat ini berfungsi sebagai SUPPORT untuk screening dini mandiri, BUKAN pengganti diagnosis medis resmi dari dokter/tenaga medis profesional.', 'This tool is a SUPPORT aid for early self-screening, NOT a replacement for an official medical diagnosis by a doctor or professional medical staff.'],
+  ['Upload Foto Luka untuk Scan', 'Upload Wound Photo to Scan'],
+  ['Langsung Buka Scan', 'Opens Scan Directly'],
+  ['Drag & Drop atau Klik untuk Upload Foto Luka', 'Drag & Drop or Click to Upload a Wound Photo'],
+  ['Mendukung format JPG, PNG. Gambar langsung diproses.', 'Supports JPG and PNG. The image is processed immediately.'],
+  ['Butuh bantuan cara mengunggah foto yang baik?', 'Needs help on how to upload a good photo?'],
+  ['Metrik Performa Sistem', 'System Performance Metrics'],
+  ['Evaluasi OOF: 500 foto ulkus kaki diabetik', 'OOF evaluation: 500 diabetic foot ulcer images'],
+  ['Akurasi Diagnostik', 'Diagnostic Accuracy'],
+  ['Evaluasi OOF', 'OOF evaluation'],
+  ['Akurasi keseluruhan dari confusion matrix OOF yang diberikan', 'Overall accuracy from the supplied OOF confusion matrix'],
+  ['Sensitivitas (Recall)', 'Sensitivity (Recall)'],
+  ['Recall Tinggi', 'High Recall'],
+  ['Meminimalkan negatif palsu pada jaringan iskemik kritis', 'Macro-average recall across Wagner Grades 0–4'],
+  ['Tingkat Spesifisitas', 'Specificity Rate'],
+  ['Tangguh', 'Robust'],
+  ['Macro precision pada Wagner Grade 0–4', 'Macro-average precision across Wagner Grades 0–4'],
+  ['Rata-rata Waktu Inferensi', 'Avg. Inference Time'],
+  ['Foto dalam confusion matrix out-of-fold yang diberikan', 'Images in the supplied out-of-fold confusion matrix'],
+  ['Pertanyaan Sering Diajukan', 'Frequently Asked Questions'],
+  ['Panduan Wagner Grade 0–4, batasan AI, dan langkah tindak lanjut yang aman.', 'Wagner Grade 0–4 guidance, AI limitations, and safe next steps.'],
+  ['Apa itu Diabetic Foot Ulcer (DFU)?', 'What is Diabetic Foot Ulcer (DFU)?'],
+  ['Diabetic Foot Ulcer (DFU) adalah luka kronis pada kaki penderita diabetes. Neuropati dan gangguan aliran darah dapat membuat luka tidak disadari, sulit sembuh, dan berkembang menjadi infeksi atau gangren.', 'A diabetic foot ulcer (DFU) is a chronic wound on the foot of a person with diabetes. Neuropathy and reduced blood flow can make it unnoticed, slow to heal, and prone to infection or gangrene.'],
+  ['Seberapa akurat analisis AI ULCARE?', 'How accurate is the ULCARE AI analysis?'],
+  ['Pada evaluasi out-of-fold 500 foto yang diberikan, akurasi keseluruhan adalah 77,4%, macro recall 77,4%, dan macro precision 77,3%. Hasil per foto bukan diagnosis dan tingkat keyakinan model bukan kepastian klinis.', 'In the supplied out-of-fold evaluation of 500 images, overall accuracy was 77.4%, macro recall 77.4%, and macro precision 77.3%. A single-image result is not a diagnosis, and model confidence is not clinical certainty.'],
+  ['Apa yang harus dilakukan jika hasil analisis menunjukkan Stage 3 atau Stage 4?', 'What should I do if the analysis shows Stage 3 or Stage 4?'],
+  ['Cari penilaian medis segera. Grade 3 dapat menunjukkan abses, osteomielitis, atau infeksi dalam; Grade 4 menunjukkan gangren lokal pada jari/forefoot. Keduanya memerlukan evaluasi segera oleh tim klinis.', 'Seek urgent medical assessment. Grade 3 may indicate an abscess, osteomyelitis, or deep infection; Grade 4 indicates localized toe or forefoot gangrene. Both require prompt clinical evaluation.'],
+  ['Alat Deteksi AI', 'AI Detection Tool'],
+  ['Penilaian Citra Luka', 'Wound Image Assessment'],
+  ['Unggah atau seret foto luka kaki diabetik yang jelas untuk klasifikasi Wagner stage secara instan.', 'Upload or drag and drop a clear image of your diabetic foot wound for instant Wagner stage classification.'],
+  ['Kembali ke Dashboard', 'Back to Dashboard'],
+  ['Identitas Penilaian (Opsional)', 'Assessment Identifier (Optional)'],
+  ['Nama Anda / Label Penilaian', 'Your Name / Assessment Label'],
+  ['Unggah Foto Ulkus', 'Ulcer Image Upload'],
+  ['Seret & Lepas Gambar di Sini', 'Drag & Drop Image Here'],
+  ['atau klik untuk memilih berkas (JPG, PNG)', 'or click to browse local files (JPG, PNG)'],
+  ['Hapus Gambar', 'Remove Image'],
+  ['Keyakinan AI', 'AI Confidence'],
+  ['Area yang disorot pada Grad-CAM menjadi dasar prediksi ini.', 'The areas highlighted in Grad-CAM are the basis of this prediction.'],
+  ['Probabilitas setiap stage', 'Probability of each stage'],
+  ['Peta Perhatian Grad-CAM', 'Grad-CAM Attention Map'],
+  ['Dihasilkan langsung dari model', 'Generated directly by the model'],
+  ['Perhatian rendah', 'Low attention'],
+  ['Perhatian tinggi', 'High attention'],
+  ['Warna hangat (merah–kuning) menandai area foto yang paling memengaruhi keputusan model. Ini adalah penjelasan visual, bukan batas luka yang dipetakan.', 'Warm colors (red–yellow) mark the parts of the photo that most influenced the model’s decision. This is a visual explanation, not a mapped wound boundary.'],
+  ['Saran Klinis', 'Clinical Advice'],
+  ['Gunakan hasil ini hanya sebagai skrining. Tindakan yang disarankan ditampilkan berdasarkan Wagner Grade dan tetap harus ditentukan oleh tenaga kesehatan berlisensi.', 'Use this result only for screening. Suggested actions are based on Wagner Grade and must still be determined by a licensed health professional.'],
+  ['Cetak Ringkasan Hasil', 'Print Result Summary'],
+  ['Unduh Ringkasan (PDF)', 'Download Summary (PDF)'],
+  ['Menunggu Analisis Gambar', 'Awaiting Image Analysis'],
+  ['Edukasi DFU', 'DFU Education'],
+  ['Panduan Foto', 'Photo guide'],
+  ['Unggah foto luka kaki diabetik lalu klik "Jalankan Analisis Stage AI" untuk melihat prediksi Wagner stage beserta Grad-CAM-nya.', 'Upload a diabetic foot wound image and click "Run AI Stage Analysis" to see the predicted Wagner stage and its Grad-CAM.'],
+  ['Pusat Edukasi Pasien', 'Patient Education Center'],
+  ['Panduan & Edukasi DFU', 'DFU Guide & Education'],
+  ['Pelajari tahapan perkembangan luka diabetik, kenali tanda bahaya infeksi berat, serta ikuti panduan pengambilan foto yang baik untuk hasil skrining AI yang optimal.', 'Learn how diabetic wounds progress, recognize the warning signs of severe infection, and follow the photo guide for the best AI screening results.'],
+  ['Disclaimer Penting Mengenai Alat Skrining ini:', 'Important Disclaimer About This Screening Tool:'],
+  ['Pemahaman Medis', 'Medical Understanding'],
+  ['Apa itu DFU & Tahapan Perkembangannya?', 'What Is DFU & How Does It Progress?'],
+  ['Diabetic Foot Ulcer (DFU) merupakan luka pada kaki penderita diabetes yang membutuhkan penilaian dini.', 'A diabetic foot ulcer (DFU) is a foot wound in a person with diabetes that needs early assessment.'],
+  ['Tahapan Klasifikasi Luka Diabetik & Gangren:', 'Diabetic Wound & Gangrene Classification Stages:'],
+  ['Kulit Utuh / Risiko Tinggi', 'Intact Skin / High Risk'],
+  ['Belum ada luka terbuka, namun terdapat kelainan bentuk kaki, kapalan tebal, atau neuropati perifer.', 'No open wound yet, but there is foot deformity, thick calluses, or peripheral neuropathy.'],
+  ['Ulserasi Dangkal (Superficial)', 'Superficial Ulcer'],
+  ['Luka terbuka di lapisan kulit atas tanpa mengenai jaringan subkutan atau tendon.', 'An open wound in the upper skin layer without involving subcutaneous tissue or tendon.'],
+  ['Luka Dalam (Deep Ulcer)', 'Deep Ulcer'],
+  ['Luka menembus otot, tendon, atau sendi, namun belum terjadi abses atau infeksi tulang.', 'The wound reaches muscle, tendon, or joint, but there is no abscess or bone infection yet.'],
+  ['Abses / Osteomielitis', 'Abscess / Osteomyelitis'],
+  ['Luka dalam disertai infeksi jaringan lunak, penumpukan nanah (abses), atau infeksi tulang.', 'A deep wound with soft-tissue infection, pus collection (abscess), or bone infection.'],
+  ['Grade 4 (Gangren Lokal)', 'Grade 4 (Localized Gangrene)'],
+  ['Gangren Lokal (Jari/Bagian Depan Kaki)', 'Localized Gangrene (Toe/Forefoot)'],
+  ['Jaringan mengalami kehitaman/kebiruan basah berbau, terbatas pada jari atau sebagian telapak kaki.', 'Tissue turns moist, foul-smelling black/blue, limited to the toes or part of the forefoot.'],
+  ['Tanda-Tanda Bahaya (Red Flags) - Segera Cek ke Dokter', 'Warning Signs (Red Flags) - See a Doctor Immediately'],
+  ['Cairan nanah (exudate) berwarna keruh/hijau dan berbau busuk tajam secara mendadak.', 'Cloudy/green pus (exudate) with a sudden, sharp foul smell.'],
+  ['Demam tinggi (>38°C), menggigil, atau kebingungan (tanda toksik sitemik/sepsis).', 'High fever (>38°C), chills, or confusion (signs of systemic toxicity/sepsis).'],
+  ['Perubahan warna jaringan kulit menjadi hitam, kebiruan, atau merah tua yang meluas cepat.', 'Skin tissue turning black, bluish, or dark red and spreading quickly.'],
+  ['Terasa gelembung udara di bawah kulit saat ditekan (sensasi krepitasi/gas gangrene).', 'A feeling of air bubbles under the skin when pressed (crepitus/gas gangrene).'],
+  ['Panduan Pengambilan Foto', 'Photo Guide'],
+  ['Cara Upload Foto Luka yang Baik untuk Hasil Maksimal', 'How to Upload a Good Wound Photo for the Best Results'],
+  ['Kualitas foto yang baik sangat mempengaruhi tingkat akurasi klasifikasi AI ULCARE.', 'Good photo quality strongly affects the classification accuracy of ULCARE AI.'],
+  ['1. Pencahayaan Cukup', '1. Adequate Lighting'],
+  ['Gunakan cahaya terang alami atau lampu ruangan netral. Hindari bayangan pekat atau cahaya redup.', 'Use bright natural light or neutral room lighting. Avoid dark shadows or dim light.'],
+  ['2. Angle Tegak Lurus', '2. Straight-On Angle'],
+  ['Posisikan kamera tepat tegak lurus (90 derajat) menghadap ke area luka. Hindari sudut miring extreme.', 'Hold the camera exactly perpendicular (90 degrees) to the wound. Avoid extreme tilted angles.'],
+  ['3. Jarak Fokus Ideal', '3. Ideal Focus Distance'],
+  ['Ambil foto berjarak sekitar 15-20 cm dari luka. Pastikan seluruh batas tepi luka terlihat jelas.', 'Take the photo about 15–20 cm from the wound. Make sure the whole wound edge is clearly visible.'],
+  ['4. Bersihkan Lensa & Area', '4. Clean the Lens & Area'],
+  ['Pastikan lensa kamera tidak buram/berminyak. Bersihkan pembalut luka terlebih dahulu jika memungkinkan.', 'Make sure the camera lens is not blurry or greasy. Remove the wound dressing first if possible.'],
+  ['Mulai Upload Foto di Alat Pindai AI', 'Start Uploading a Photo in the AI Scan Tool'],
+  ['Profil Tim Peneliti', 'Research Team Profile'],
+  ['Anggota Peneliti Proyek', 'Project Research Members'],
+  ['Peneliti Utama', 'Lead Researcher'],
+  ['SMA Brawijaya Smart School • Peneliti Utama Proyek & Direktur Metodologi Ilmiah', 'SMA Brawijaya Smart School • Lead Project Researcher & Scientific Methodology Director'],
+  ['Insinyur Pemrograman', 'Programming Engineer'],
+  ['SMA Brawijaya Smart School • Pengembang Utama, Integrasi Model AI & Arsitektur Web', 'SMA Brawijaya Smart School • Lead Developer, AI Model Integration & Web Architecture'],
+  ['Admin Riset & Data', 'Research Admin & Data'],
+  ['SMA Brawijaya Smart School • Administrasi Riset & Pengelolaan Dataset Klinis', 'SMA Brawijaya Smart School • Research Administration & Clinical Dataset Management'],
+  ['Program Riset & Inovasi Ilmiah SMA • Malang, Indonesia', 'High School Scientific Research & Innovation Program • Malang, Indonesia'],
+  ['Coba Alat AI ULCARE', 'Test ULCARE AI Tool'],
+  ['mis. Scan Kaki Saya', 'e.g. My Foot Scan Assessment'],
+  ['Foto Luka', 'Wound Preview'],
+  ['Foto', 'Photo'],
+  ['Peta aktivasi', 'Activation map'],
+  ['Overlay + kontur 50% / 75%', 'Overlay + 50% / 75% contours'],
+  ['tinggi', 'high'],
+  ['rendah', 'low'],
+  ['Unduh Figur Grad-CAM++ (PNG)', 'Download Grad-CAM++ Figure (PNG)'],
+  ['Foto ditampilkan sesuai masukan model (persegi 224×224). Kontur putih putus-putus menandai area ≥50% aktivasi, kontur hitam area ≥75%.', 'The photo is shown as the model sees it (224×224 square). The dashed white contour marks areas ≥50% activation, the black contour areas ≥75%.'],
+];
+/* proper nouns, brand, contact data and strings identical in both languages */
+const IGNORE = new Set(['html', 'UL', 'CARE', 'TIM WISPO 3', 'Dashboard', '🇮🇩 Indonesia', '🇬🇧 English', 'FAQ', 'Real-time', 'OK', 'Grad-CAM',
+  'Stage 0', 'Stage 1', 'Stage 2', 'Stage 3', 'SEC', 'HM', 'EFS', 'VBS', 'Sangsthita Earlene Cintanugraha', 'Haura Muafa', 'Elmirana Febrina Sari', 'Vania Beby Setyawati',
+  'SMA BRAWIJAYA SMART SCHOOL', 'SMA Brawijaya Smart School', 'DFU', `Model: ${MODEL_NAME} · ${MODEL_SIZE}`]);
+
+/* mixed-markup paragraphs: [Indonesia, English] as HTML */
+const HT = {
+  'edu-disclaimer': ['Aplikasi AI ULCARE adalah alat bantu (<strong>SUPPORT tool</strong>) untuk skrining awal dan pemantauan mandiri. Alat ini <strong>BUKAN diagnosis resmi medis</strong>. Hasil skrining tidak menggantikan pemeriksaan fisik langsung oleh dokter, bedah vaskular, atau spesialis perawatan luka.',
+    'The ULCARE AI application is an aid (<strong>SUPPORT tool</strong>) for early screening and self-monitoring. It is <strong>NOT an official medical diagnosis</strong>. Screening results do not replace a direct physical examination by a doctor, vascular surgeon, or wound care specialist.'],
+  'team-intro': ['Pengembang dan peneliti di balik <strong>“ULCARE: Aplikasi Web AI untuk Skrining Diabetic Foot Ulcer”</strong>.',
+    'Developers and researchers behind <strong>“ULCARE: AI Web Application for Diabetic Foot Ulcer Screening”</strong>.'],
+  'redflag-intro': ['Apabila Anda menemukan salah satu dari tanda-tanda berikut, <strong>segera menuju IGD rumah sakit terdekat</strong>:',
+    'If you notice any of the following signs, <strong>go to the nearest hospital emergency room immediately</strong>:'],
+  'dfu-hero': ['Panduan & Edukasi Diabetic Foot Ulcer', 'Diabetic Foot Ulcer Guide & Education'],
+  'dfu-hero-copy': ['Kenali DFU, pahami klasifikasi Wagner, dan ketahui kapan kaki diabetik perlu diperiksa segera.', 'Learn about DFU, understand Wagner classification, and know when a diabetic foot needs urgent assessment.'],
+  'dfu-disclaimer-title': ['Peringatan penting mengenai alat skrining', 'Important screening-tool disclaimer'],
+  'dfu-what': ['Apa itu Diabetic Foot Ulcer (DFU)?', 'What Is a Diabetic Foot Ulcer (DFU)?'],
+  'dfu-what-copy': ['<p>Diabetic Foot Ulcer (DFU) adalah luka kronis pada kaki penderita diabetes yang dapat meluas dari kulit ke jaringan lebih dalam. Kondisi ini terutama berkaitan dengan <strong>neuropati perifer</strong>, yang mengurangi kemampuan merasakan cedera, dan <strong>penyakit arteri perifer</strong>, yang menghambat aliran darah serta penyembuhan.</p><p class="mt-2">Tanpa penanganan dini, DFU dapat berkembang menjadi infeksi jaringan dalam, osteomielitis, gangren, hingga amputasi.</p>', '<p>A diabetic foot ulcer (DFU) is a chronic foot wound in a person with diabetes that can extend from the skin into deeper tissue. It is mainly associated with <strong>peripheral neuropathy</strong>, which reduces awareness of injury, and <strong>peripheral arterial disease</strong>, which limits blood flow and healing.</p><p class="mt-2">Without early care, a DFU can progress to deep infection, osteomyelitis, gangrene, and amputation.</p>'],
+  'dfu-what-source': ['Sumber: Mehraj (2018); Shah et al. (2022); Monteiro-Soares et al. (2020).', 'Sources: Mehraj (2018); Shah et al. (2022); Monteiro-Soares et al. (2020).'],
+  'dfu-wagner': ['Tahapan DFU berdasarkan Wagner Classification', 'DFU Stages in the Wagner Classification'],
+  'dfu-wagner-copy': ['Skala Wagner-Meggitt membagi kaki diabetik menjadi Grade 0–5 berdasarkan kondisi kulit, kedalaman luka, infeksi tulang, dan gangren. Ini adalah sistem penggolongan tingkat keparahan, bukan alat diagnosis mandiri.', 'The Wagner-Meggitt scale divides diabetic foot conditions into Grades 0–5 based on skin status, wound depth, bone infection, and gangrene. It is a severity-classification system, not a self-diagnostic tool.'],
+  'dfu-g0': ['<strong class="text-emerald-800">Grade 0 — Berisiko mengalami ulkus</strong><p class="mt-2 text-slate-600">Kulit utuh, tetapi terdapat kapalan, deformitas, atau lesi pra-ulkus. Belum ada ulkus terbuka.</p>', '<strong class="text-emerald-800">Grade 0 — At risk of ulceration</strong><p class="mt-2 text-slate-600">Skin is intact, but callus, deformity, or a pre-ulcerative lesion is present. There is no open ulcer.</p>'],
+  'dfu-g1': ['<strong class="text-sky-800">Grade 1 — Ulkus superfisial</strong><p class="mt-2 text-slate-600">Luka terbatas pada epidermis dan/atau dermis tanpa keterlibatan jaringan dalam.</p>', '<strong class="text-sky-800">Grade 1 — Superficial ulcer</strong><p class="mt-2 text-slate-600">The wound is limited to epidermis and/or dermis without deep-tissue involvement.</p>'],
+  'dfu-g2': ['<strong class="text-amber-800">Grade 2 — Ulkus dalam</strong><p class="mt-2 text-slate-600">Luka dapat mencapai tendon, kapsul sendi, atau tulang tanpa abses atau osteomielitis teridentifikasi.</p>', '<strong class="text-amber-800">Grade 2 — Deep ulcer</strong><p class="mt-2 text-slate-600">The wound may reach tendon, joint capsule, or bone without an identified abscess or osteomyelitis.</p>'],
+  'dfu-g3': ['<strong class="text-orange-800">Grade 3 — Ulkus dalam dengan infeksi</strong><p class="mt-2 text-slate-600">Terdapat komplikasi berat seperti abses atau osteomielitis.</p>', '<strong class="text-orange-800">Grade 3 — Deep ulcer with infection</strong><p class="mt-2 text-slate-600">Severe complications such as an abscess or osteomyelitis are present.</p>'],
+  'dfu-g4': ['<strong class="text-rose-800">Grade 4 — Gangren lokal</strong><p class="mt-2 text-slate-600">Kematian jaringan pada sebagian kaki, misalnya jari kaki, bagian depan kaki, atau tumit.</p>', '<strong class="text-rose-800">Grade 4 — Localized gangrene</strong><p class="mt-2 text-slate-600">Tissue death affects part of the foot, such as the toes, forefoot, or heel.</p>'],
+  'dfu-g5': ['<strong class="text-rose-950">Grade 5 — Gangren luas</strong><p class="mt-2 text-slate-700">Gangren melibatkan sebagian besar atau seluruh kaki dan menunjukkan kerusakan jaringan yang sangat berat.</p>', '<strong class="text-rose-950">Grade 5 — Extensive gangrene</strong><p class="mt-2 text-slate-700">Gangrene involves most or all of the foot and indicates very severe tissue damage.</p>'],
+  'dfu-scope': ['<strong>Cakupan ULCARE:</strong> model citra ini hanya mengeluarkan Grade 0–4. Grade 5 ditampilkan untuk edukasi dan harus dianggap keadaan darurat. Foto saja tidak cukup untuk memastikan grade klinis, mendeteksi seluruh infeksi, atau menilai aliran darah.', '<strong>ULCARE scope:</strong> this image model outputs only Grades 0–4. Grade 5 is shown for education and must be treated as an emergency. A photograph alone cannot confirm a clinical grade, detect every infection, or assess blood flow.'],
+  'dfu-alert': ['Kondisi alert: kapan harus segera dibawa ke dokter?', 'Alert conditions: when should urgent medical care be sought?'],
+  'dfu-alert-intro': ['Neuropati dapat mengurangi rasa nyeri; jangan menunggu luka membesar atau terasa sakit sebelum mencari bantuan.', 'Neuropathy can reduce pain sensation; do not wait for a wound to enlarge or become painful before seeking care.'],
+  'dfu-urgent': ['A. Pertolongan segera — pergi ke IGD', 'A. Immediate care — go to an emergency department'],
+  'dfu-urgent-copy': ['<ul class="list-disc pl-4 space-y-1"><li>Kaki atau jari menghitam, baru muncul, atau meluas.</li><li>Demam, menggigil, kebingungan, atau kondisi tubuh memburuk.</li><li>Kemerahan/pembengkakan cepat menyebar, nanah, atau luka sangat dalam.</li><li>Kaki mendadak dingin, pucat, atau kebiruan dengan nyeri/perubahan sensasi mendadak.</li></ul><p class="mt-3 font-semibold text-rose-800">Gangren, infeksi berat, atau gangguan aliran darah akut dapat mengancam anggota tubuh maupun nyawa.</p>', '<ul class="list-disc pl-4 space-y-1"><li>A foot or toe becomes black, newly discoloured, or rapidly worsens.</li><li>Fever, chills, confusion, or declining general condition.</li><li>Rapidly spreading redness/swelling, pus, or a very deep wound.</li><li>A foot suddenly becomes cold, pale, or bluish with pain or sudden sensory change.</li></ul><p class="mt-3 font-semibold text-rose-800">Gangrene, severe infection, or acute blood-flow compromise can threaten limb and life.</p>'],
+  'dfu-soon': ['B. Periksa dokter secepatnya', 'B. Arrange same-day medical review'],
+  'dfu-soon-copy': ['<ul class="list-disc pl-4 space-y-1"><li>Luka terbuka, lepuh, atau kulit pecah.</li><li>Kaki lebih hangat, merah, atau bengkak dari biasanya.</li><li>Luka mengeluarkan cairan, berbau tidak biasa, atau tidak membaik.</li><li>Kapalan disertai perdarahan atau perubahan warna kulit.</li></ul><p class="mt-3 font-semibold text-amber-800">Hubungi dokter atau layanan perawatan kaki diabetik pada hari yang sama.</p>', '<ul class="list-disc pl-4 space-y-1"><li>An open wound, blister, or broken skin appears.</li><li>The foot is warmer, redder, or more swollen than usual.</li><li>The wound drains fluid, smells unusual, or does not improve.</li><li>A callus has bleeding or skin-colour change.</li></ul><p class="mt-3 font-semibold text-amber-800">Contact a doctor or diabetic-foot care service the same day.</p>'],
+  'dfu-alert-note': ['Tidak semua tanda bahaya muncul bersamaan; infeksi kaki diabetik dapat terjadi tanpa demam. Jangan hanya memantau di rumah bila ada gangren, infeksi berat, atau dugaan gangguan aliran darah akut.', 'Not every warning sign appears together; a diabetic-foot infection can occur without fever. Do not monitor at home alone when gangrene, severe infection, or acute blood-flow compromise is suspected.'],
+  'dfu-photo': ['Cara mengambil foto DFU yang baik', 'How to take a good DFU photo'],
+  'dfu-photo-copy': ['Foto yang jelas membantu skrining, tetapi tidak menggantikan pemeriksaan klinis.', 'A clear photograph supports screening but does not replace a clinical examination.'],
+  'dfu-p1': ['<i class="fa-solid fa-sun text-teal-300 text-lg"></i><h4 class="font-bold text-sm text-white">1. Pencahayaan cukup</h4><p class="text-slate-300">Gunakan cahaya terang alami atau lampu netral; hindari bayangan pekat.</p>', '<i class="fa-solid fa-sun text-teal-300 text-lg"></i><h4 class="font-bold text-sm text-white">1. Adequate lighting</h4><p class="text-slate-300">Use bright natural light or neutral room lighting; avoid heavy shadows.</p>'],
+  'dfu-p2': ['<i class="fa-solid fa-up-down-left-right text-teal-300 text-lg"></i><h4 class="font-bold text-sm text-white">2. Sudut tegak lurus</h4><p class="text-slate-300">Arahkan kamera tegak lurus ke luka dan hindari sudut terlalu miring.</p>', '<i class="fa-solid fa-up-down-left-right text-teal-300 text-lg"></i><h4 class="font-bold text-sm text-white">2. Straight-on angle</h4><p class="text-slate-300">Aim the camera perpendicular to the wound and avoid extreme angles.</p>'],
+  'dfu-p3': ['<i class="fa-solid fa-expand text-teal-300 text-lg"></i><h4 class="font-bold text-sm text-white">3. Jarak fokus ideal</h4><p class="text-slate-300">Ambil foto sekitar 15–20 cm dan pastikan seluruh tepi luka terlihat.</p>', '<i class="fa-solid fa-expand text-teal-300 text-lg"></i><h4 class="font-bold text-sm text-white">3. Ideal focus distance</h4><p class="text-slate-300">Photograph from about 15–20 cm and include the full wound edge.</p>'],
+  'dfu-p4': ['<i class="fa-solid fa-camera text-teal-300 text-lg"></i><h4 class="font-bold text-sm text-white">4. Lensa dan area jelas</h4><p class="text-slate-300">Pastikan lensa tidak buram dan area luka terlihat tanpa identitas pribadi.</p>', '<i class="fa-solid fa-camera text-teal-300 text-lg"></i><h4 class="font-bold text-sm text-white">4. Clear lens and area</h4><p class="text-slate-300">Keep the lens clear and show the wound area without personal identifiers.</p>'],
+  'dfu-refs-title': ['Referensi ilmiah', 'Scientific references'],
+  'dfu-refs': ['<ol class="list-decimal pl-5 space-y-1"><li>Mehraj (2018), DOI: 10.22271/ortho.2018.v4.i1n.133</li><li>Shah et al. (2022), DOI: 10.7759/cureus.21501</li><li>Oyibo et al. (2001), DOI: 10.2337/diacare.24.1.84</li><li>Monteiro-Soares et al. (2020), DOI: 10.1002/dmrr.3272</li><li>Monteiro-Soares et al. (2023, IWGDF), DOI: 10.1002/dmrr.3648</li><li>Meloni et al. (2020), DOI: 10.1002/dmrr.3396</li></ol>', '<ol class="list-decimal pl-5 space-y-1"><li>Mehraj (2018), DOI: 10.22271/ortho.2018.v4.i1n.133</li><li>Shah et al. (2022), DOI: 10.7759/cureus.21501</li><li>Oyibo et al. (2001), DOI: 10.2337/diacare.24.1.84</li><li>Monteiro-Soares et al. (2020), DOI: 10.1002/dmrr.3272</li><li>Monteiro-Soares et al. (2023, IWGDF), DOI: 10.1002/dmrr.3648</li><li>Meloni et al. (2020), DOI: 10.1002/dmrr.3396</li></ol>'],  'role-lead': ['Ketua Peneliti', 'Research Lead'],
+  'bio-lead': ['Unsur medis & kajian literatur.', 'Medical content & literature review.'],
+  'role-programmer': ['Programmer & Metodologi', 'Programmer & Methodology'],
+  'bio-programmer': ['Metodologi, hasil, dan pemrograman.', 'Methodology, results, and programming.'],
+  'role-assistant': ['Asisten Peneliti', 'Research Assistant'],
+  'bio-assistant': ['Teknis, administrasi, dan dataset.', 'Technical support, administration, and dataset.'],
+};
+
+/* ---------- dynamic text ---------- */
+const D = {
+  id: {
+    xaiTitle: (n, c) => `Prediksi: Wagner Stage ${n} (${c.toFixed(1)}%)`, xaiClass: (n) => `GRADCAM++ untuk kelas: Wagner Stage ${n}`, ttaNote: '(rata-rata TTA)',
+    analyze: 'Jalankan Analisis Stage AI', busy: 'Menganalisis model & Grad-CAM…', busySlow: 'Memuat model (pertama kali lebih lama)…',
+    reasonTitle: (n) => `Mengapa diprediksi Stage ${n}?`,
+    stageDesc: (n, name) => `Model memprediksi Stage ${n} (${name}) berdasarkan area visual yang paling berkontribusi pada keputusan.`,
+    notifTitle: 'Notifikasi', needImageT: 'Gambar Diperlukan', needImage: 'Unggah foto luka terlebih dahulu sebelum menjalankan analisis AI.',
+    badImageT: 'Gambar Tidak Valid', badImage: 'Berkas tidak dapat dibaca. Gunakan foto JPG atau PNG.',
+    removedT: 'Gambar Dihapus', removed: 'Gambar telah dihapus. Silakan pilih gambar baru.',
+    failedT: 'Analisis Gagal', timeoutT: 'Tidak Ada Respons', timeout: 'Server tidak merespons dalam 2 menit. Periksa terminal Streamlit lalu coba lagi.',
+    pdfFailed: 'Pembuatan PDF gagal. Coba gunakan opsi Print sebagai gantinya.',
+    clinicalTitle: 'Rincian grade klinis', clinicalPresentation: 'Gambaran klinis', clinicalIntervention: 'Langkah tindak lanjut', clinicalEvidence: 'Bukti / konteks',
+  },
+  en: {
+    xaiTitle: (n, c) => `Prediction: Wagner Stage ${n} (${c.toFixed(1)}%)`, xaiClass: (n) => `GRADCAM++ for class: Wagner Stage ${n}`, ttaNote: '(TTA average)',
+    analyze: 'Run AI Stage Analysis', busy: 'Analyzing model & Grad-CAM…', busySlow: 'Loading model (first run takes longer)…',
+    reasonTitle: (n) => `Why was Stage ${n} predicted?`,
+    stageDesc: (n, name) => `The model predicts Stage ${n} (${name}) based on the visual areas that contributed most to the decision.`,
+    notifTitle: 'Notification', needImageT: 'Image Required', needImage: 'Please upload a wound photo before running the AI analysis.',
+    badImageT: 'Invalid Image', badImage: 'The file could not be read. Use a JPG or PNG photo.',
+    removedT: 'Image Removed', removed: 'The image has been removed. You can now select a new one.',
+    failedT: 'Analysis Failed', timeoutT: 'No Response', timeout: 'The server did not respond within 2 minutes. Check the Streamlit terminal and try again.',
+    pdfFailed: 'Could not generate the PDF. Please try the Print option instead.',
+    clinicalTitle: 'Clinical grade details', clinicalPresentation: 'Clinical presentation', clinicalIntervention: 'Recommended next step', clinicalEvidence: 'Evidence / context',
+  },
+};
+const STAGES = [
+  { hex:'#10b981', card:'bg-emerald-50/80 border-emerald-200 text-emerald-900', badge:'bg-emerald-200 text-emerald-800', pct:'text-emerald-600',
+    name:['Lesi pra/pasca-ulkus; kulit utuh','Pre-/post-ulcerative lesion; intact skin'],
+    reason:['Peta Grad-CAM menunjukkan area yang dipakai model untuk prediksi, bukan pemeriksaan kedalaman luka.','The Grad-CAM map shows areas used by the model; it does not examine wound depth.'],
+    presentation:['Kulit utuh dengan deformitas, kapalan, atau kemerahan.','Intact skin with deformity, callus, or redness.'], intervention:['Alas kaki offloading, perawatan kapalan, kontrol glikemik, edukasi.','Offloading footwear, callus care, glycaemic control, education.'], evidence:['Pencegahan tekanan dan pemantauan perubahan dini dianjurkan.','Pressure prevention and early-change monitoring are recommended.'] },
+  { hex:'#0ea5e9', card:'bg-sky-50/80 border-sky-200 text-sky-900', badge:'bg-sky-200 text-sky-800', pct:'text-sky-600',
+    name:['Ulkus superfisial (dermis)','Superficial ulcer (dermis)'], reason:['Prediksi visual perlu dikonfirmasi dengan pemeriksaan klinis langsung.','A visual prediction needs confirmation by direct clinical examination.'],
+    presentation:['Ulkus terbatas pada dermis tanpa tendon atau sendi terekspos.','Ulcer limited to dermis without exposed tendon or joint.'], intervention:['Debridement lokal, pengurangan tekanan, balutan lembap sesuai penilaian klinis.','Local debridement, pressure reduction, and moist dressing as clinically assessed.'], evidence:['Waktu sembuh median yang dirujuk: 23 hari.','Referenced median healing time: 23 days.'] },
+  { hex:'#f59e0b', card:'bg-amber-50/80 border-amber-200 text-amber-900', badge:'bg-amber-200 text-amber-800', pct:'text-amber-600',
+    name:['Ulkus dalam','Deep ulcer'], reason:['Grad-CAM adalah alat interpretasi, bukan batas atau kedalaman luka.','Grad-CAM is an interpretation aid, not a wound border or depth measurement.'],
+    presentation:['Ulkus menembus tendon, kapsul, atau tulang tanpa abses.','Ulcer penetrating tendon, capsule, or bone without abscess.'], intervention:['Debridement ekstensif, offloading, skrining infeksi dan perfusi.','Extensive debridement, offloading, infection and perfusion screening.'], evidence:['Waktu sembuh median yang dirujuk: 50 hari.','Referenced median healing time: 50 days.'] },
+  { hex:'#f97316', card:'bg-orange-50/80 border-orange-200 text-orange-900', badge:'bg-orange-200 text-orange-800', pct:'text-orange-600',
+    name:['Infeksi jaringan dalam','Deep tissue infection'], reason:['Temuan ini membutuhkan penilaian profesional segera; model tidak menggantikan pemeriksaan infeksi.','This finding needs prompt professional assessment; the model does not replace infection assessment.'],
+    presentation:['Osteomielitis, abses, atau tenosinovitis.','Osteomyelitis, abscess, or tenosynovitis.'], intervention:['Debridement bedah segera, reseksi tulang bila perlu, antibiotik terarah.','Urgent surgical debridement, bone resection when needed, targeted antibiotics.'], evidence:['Dikelola sebagai kondisi serius oleh tim multidisiplin.','Managed as a serious condition by a multidisciplinary team.'] },
+  { hex:'#f43f5e', card:'bg-rose-50/80 border-rose-200 text-rose-900', badge:'bg-rose-200 text-rose-800', pct:'text-rose-600',
+    name:['Gangren lokal (jari/forefoot)','Localized gangrene (toe/forefoot)'], reason:['Segera cari pertolongan medis; prediksi citra tidak dapat menilai perfusi atau kebutuhan amputasi.','Seek urgent medical care; image prediction cannot assess perfusion or the need for amputation.'],
+    presentation:['Gangren parsial pada jari kaki atau forefoot.','Partial gangrene localized to toes or forefoot.'], intervention:['Penilaian revaskularisasi, tindakan digital/partial foot, atau rekonstruksi oleh tim bedah.','Revascularization assessment, digital/partial-foot procedure, or reconstruction by surgical team.'], evidence:['Waktu sembuh median yang dirujuk: 119 hari.','Referenced median healing time: 119 days.'] },
+];
+const li = () => (state.lang === 'en' ? 1 : 0);
+const t = (key, ...args) => { const v = D[state.lang][key]; return typeof v === 'function' ? v(...args) : v; };
+
+/* ---------- language ---------- */
+const BY_TEXT = new Map();
+PAIRS.forEach((p) => { BY_TEXT.set(p[0], p); BY_TEXT.set(p[1], p); });
+const norm = (x) => x.replace(/\s+/g, ' ').trim();
+const textNodes = [], attrNodes = [], missing = [];
+
+function indexDom() {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n; (n = walker.nextNode());) {
+    const el = n.parentElement, k = norm(n.nodeValue);
+    if (!k || !el || el.closest('script,style,[data-t],[data-dyn]')) continue;
+    const pair = BY_TEXT.get(k);
+    if (pair) textNodes.push({ n, pair, lead: n.nodeValue.match(/^\s*/)[0], trail: n.nodeValue.match(/\s*$/)[0] });
+    else if (/[A-Za-z]{2}/.test(k) && !IGNORE.has(k)) missing.push(k);
+  }
+  document.querySelectorAll('[placeholder],[alt]').forEach((el) => ['placeholder', 'alt'].forEach((a) => {
+    const v = el.getAttribute(a), p = v && BY_TEXT.get(v);
+    if (p) attrNodes.push({ el, a, p });
+  }));
+  if (missing.length) console.warn('ULCARE i18n: untranslated text', missing);
+}
+
+function applyLang() {
+  const i = li();
+  textNodes.forEach(({ n, pair, lead, trail }) => { n.nodeValue = lead + pair[i] + trail; });
+  attrNodes.forEach(({ el, a, p }) => el.setAttribute(a, p[i]));
+  document.querySelectorAll('[data-t]').forEach((el) => { el.innerHTML = HT[el.dataset.t][i]; });
+  document.documentElement.lang = state.lang;
+  $('lang-select').value = state.lang;
+  setBusy(state.busy);
+  renderResult();
+}
+
+function changeLanguage(lang) {
+  state.lang = lang === 'en' ? 'en' : 'id';
+  try { localStorage.setItem('ulcare-lang', state.lang); } catch (e) { /* ignore */ }
+  applyLang();
+}
+
+/* ---------- modal ---------- */
+function notify(title, message, icon) {
+  $('modal-title').textContent = title;
+  $('modal-message').textContent = message;
+  $('modal-icon').className = icon || 'fa-solid fa-circle-info';
+  $('notification-modal').classList.remove('hidden');
+  $('notification-modal').classList.add('flex');
+}
+function closeModal() { $('notification-modal').classList.add('hidden'); $('notification-modal').classList.remove('flex'); }
+const WARN = 'fa-solid fa-triangle-exclamation';
+
+/* ---------- navigation ---------- */
+const TABS = ['dashboard', 'analyzer', 'education', 'team'];
+let sidebarOpen = false, sidebarReturnFocus = null;
+
+function openSidebar() {
+  if (sidebarOpen) return;
+  sidebarOpen = true; sidebarReturnFocus = document.activeElement;
+  $('mobile-sidebar').classList.add('is-open'); $('mobile-sidebar').setAttribute('aria-hidden', 'false');
+  $('sidebar-backdrop').classList.add('is-open');
+  $('mobile-menu-button').setAttribute('aria-expanded', 'true');
+  document.documentElement.style.overflow = 'hidden';          // lock page scroll behind the drawer
+  setTimeout(() => { const c = $('sidebar-close'); if (c) c.focus({ preventScroll: true }); }, 60);
+}
+function closeSidebar(silent) {
+  if (!sidebarOpen) return;
+  sidebarOpen = false;
+  $('mobile-sidebar').classList.remove('is-open'); $('mobile-sidebar').setAttribute('aria-hidden', 'true');
+  $('sidebar-backdrop').classList.remove('is-open');
+  $('mobile-menu-button').setAttribute('aria-expanded', 'false');
+  document.documentElement.style.overflow = '';
+  if (!silent && sidebarReturnFocus && sidebarReturnFocus.focus) sidebarReturnFocus.focus({ preventScroll: true });
+}
+function wireSidebar() {
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSidebar(); });
+  window.addEventListener('resize', () => { if (window.innerWidth >= 1024) closeSidebar(true); });
+  let sx = null, sy = null;                                      // swipe left to close, swipe from left edge to open
+  document.addEventListener('touchstart', (e) => { const p = e.touches[0]; sx = p.clientX; sy = p.clientY; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (sx === null) return;
+    const p = e.changedTouches[0], dx = p.clientX - sx, dy = Math.abs(p.clientY - sy);
+    if (dy < 50 && window.innerWidth < 1024) {
+      if (sidebarOpen && dx < -60) closeSidebar();
+      else if (!sidebarOpen && sx < 18 && dx > 70) openSidebar();
+    }
+    sx = null;
+  }, { passive: true });
+}
+
+function scrollToTop() {
+  const jump = () => { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; };
+  jump(); requestAnimationFrame(jump);
+}
+function switchTab(tab) {
+  if (!TABS.includes(tab)) tab = 'dashboard';
+  closeSidebar(true);
+  TABS.forEach((name) => $(`tab-content-${name}`).classList.toggle('hidden', name !== tab));
+  document.querySelectorAll('[data-nav]').forEach((b) => {
+    const on = b.dataset.nav === tab;
+    b.classList.toggle('is-active', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  state.tab = tab;
+  scrollToTop();                     // every tab opens at its top, never mid-page
+}
+function scrollToGuide() {
+  requestAnimationFrame(() => { const g = $('photo-upload-guide'); if (g) g.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+}
+function openNewAssessment() { resetUpload(null); switchTab('analyzer'); }
+
+/* ---------- image handling ---------- */
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type)) return reject(new Error('not an image'));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read failed'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('decode failed'));
+      img.onload = () => {              // shrink big phone photos: faster upload, faster Grad-CAM
+        const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function showImage(src) {
+  cancelRequest();
+  state.image = src; state.result = null;
+  $('image-preview').src = src;
+  $('upload-prompt').classList.add('hidden');
+  $('preview-container').classList.remove('hidden');
+  $('results-section').classList.add('hidden');
+  $('empty-state').classList.remove('hidden');
+}
+async function takeFile(file, analyzeNow) {
+  try {
+    showImage(await readImage(file));
+    if (analyzeNow) { switchTab('analyzer'); runAnalysis(); }
+  } catch (e) { notify(t('badImageT'), t('badImage'), WARN); }
+}
+function handleHeroFileSelect(ev) { const f = ev.target.files[0]; ev.target.value = ''; if (f) takeFile(f, true); }
+function handleFileSelect(ev) { const f = ev.target.files[0]; ev.target.value = ''; if (f) takeFile(f, false); }
+function resetUpload(ev) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  cancelRequest();
+  state.image = null; state.result = null;
+  $('image-preview').removeAttribute('src');
+  $('preview-container').classList.add('hidden');
+  $('upload-prompt').classList.remove('hidden');
+  $('results-section').classList.add('hidden');
+  $('empty-state').classList.remove('hidden');
+  if (ev) notify(t('removedT'), t('removed'), 'fa-solid fa-trash-can');
+}
+
+/* ---------- analysis request ---------- */
+function setBusy(on) {
+  state.busy = on;
+  const btn = $('analyze-btn');
+  btn.disabled = on; btn.classList.toggle('opacity-70', on);
+  $('analyze-icon').className = (on ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-microscope') + ' mr-2';
+  $('analyze-label').textContent = on ? t(state.slow ? 'busySlow' : 'busy') : t('analyze');
+}
+function cancelRequest() {
+  clearTimeout(state.t1); clearTimeout(state.t2);
+  state.reqId = null; state.slow = false;
+  if (state.busy) setBusy(false);
+}
+function runAnalysis() {
+  if (state.busy) return;
+  if (!state.image) { notify(t('needImageT'), t('needImage'), WARN); return; }
+  state.reqId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  state.slow = false; setBusy(true);
+  state.t1 = setTimeout(() => { state.slow = true; setBusy(true); }, SLOW_MS);
+  state.t2 = setTimeout(() => { cancelRequest(); notify(t('timeoutT'), t('timeout'), WARN); }, TIMEOUT_MS);
+  send('streamlit:setComponentValue', { value: { action: 'predict', id: state.reqId, image: state.image }, dataType: 'json' });
+}
+
+/* ---------- result: stage + confidence + probability chart all come from ONE array ---------- */
+function renderResult() {
+  const r = state.result;
+  if (!r) return;
+  const i = li(), s = r.stage, S = STAGES[s], conf = r.probabilities[s];
+  $('stage-card').className = `p-6 rounded-2xl border ${S.card} flex flex-col sm:flex-row items-center justify-between gap-4`;
+  $('stage-badge').className = `text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider ${S.badge}`;
+  $('stage-badge').textContent = `Wagner Stage ${s}`;
+  $('stage-title').textContent = `Stage ${s}`;
+  $('stage-name').textContent = S.name[i];
+  $('stage-desc').textContent = t('stageDesc', s, S.name[i]);
+  $('stage-confidence').className = `text-3xl font-black ${S.pct}`;
+  $('stage-confidence').textContent = `${conf.toFixed(1)}%`;
+  $('stage-reason-title').textContent = t('reasonTitle', s);
+  $('finding-reason').textContent = S.reason[i];
+  $('stage-probabilities').innerHTML = r.probabilities.map((v, k) => {
+    const top = k === s, w = Math.max(0, Math.min(100, v));
+    return `<div class="flex items-center gap-2">` +
+      `<span class="w-14 flex-shrink-0 text-[11px] font-semibold ${top ? 'text-slate-900' : 'text-slate-500'}">Stage ${k}</span>` +
+      `<div class="relative flex-1 h-3.5 rounded-full bg-slate-100 overflow-hidden" style="background-image:repeating-linear-gradient(to right, rgba(15,23,42,.08) 0, rgba(15,23,42,.08) 1px, transparent 1px, transparent 20%)">` +
+      `<div class="h-full rounded-full" style="width:${w}%;background:${STAGES[k].hex};opacity:${top ? 1 : 0.45}"></div></div>` +
+      `<span class="w-12 flex-shrink-0 text-right font-bold ${top ? STAGES[k].pct : 'text-slate-500'}">${v.toFixed(1)}%</span>` +
+      `</div>`;
+  }).join('') + `<div class="flex justify-between text-[10px] font-semibold text-slate-400 pl-16 pr-12 pt-0.5"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>`;
+  $('xai-title').textContent = t('xaiTitle', s, conf);
+  $('xai-class').textContent = t('xaiClass', s);
+  $('xai-photo').src = r.photo; $('xai-heat').src = r.heatmap; $('result-img').src = r.overlay;
+  $('prob-note').textContent = r.tta ? t('ttaNote') : '';
+  $('clinical-details-title').textContent = t('clinicalTitle');
+  $('clinical-presentation-label').textContent = t('clinicalPresentation'); $('clinical-presentation').textContent = S.presentation[i];
+  $('clinical-intervention-label').textContent = t('clinicalIntervention'); $('clinical-intervention').textContent = S.intervention[i];
+  $('clinical-evidence-label').textContent = t('clinicalEvidence'); $('clinical-evidence').textContent = S.evidence[i];
+  $('empty-state').classList.add('hidden');
+  $('results-section').classList.remove('hidden');
+}
+function revealResults() {      // bring the stage card just under the sticky header (CSS scroll-margin-top)
+  const el = $('results-section');
+  requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
+
+/* ---------- misc actions ---------- */
+function newRequestId(prefix) { return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`; }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+/* Builds the report markup used by BOTH the Print button (window.print) and the Download button (jsPDF render),
+   so the printed page and the downloaded PDF always look the same. */
+function buildReportHTML() {
+  const r = state.result, S = STAGES[r.stage], i = li();
+  const name = ($('patient-name') && $('patient-name').value.trim()) || '';
+  const probRows = r.probabilities.map((v, k) => {
+    const top = k === r.stage;
+    return `<tr${top ? ' style="background:#f0fdfa"' : ''}><td>Stage ${k} — ${escapeHtml(STAGES[k].name[i])}</td><td style="text-align:right;font-weight:${top ? '700' : '400'}">${v.toFixed(1)}%</td></tr>`;
+  }).join('');
+  return `
+    <div class="pr-header">
+      <div><div class="pr-logo">UL<span>CARE</span></div><div class="pr-tag">AI DIABETIC FOOT ULCER SCREENING SYSTEM</div></div>
+      <div class="pr-meta">Generated: ${new Date().toLocaleString()}<br>Model: ${MODEL_NAME} · ${MODEL_SIZE}</div>
+    </div>
+    <h1>ULCARE Screening Summary</h1>
+    ${name ? `<p class="pr-sub">Assessment: <strong>${escapeHtml(name)}</strong></p>` : ''}
+    <h2>AI Screening Result</h2>
+    <table>
+      <tr><th>Predicted Wagner Grade</th><td>Stage ${r.stage} — ${escapeHtml(S.name[i])}</td></tr>
+      <tr><th>Model confidence</th><td>${r.probabilities[r.stage].toFixed(1)}%</td></tr>
+    </table>
+    <h2>Probability per Stage</h2>
+    <table>${probRows}</table>
+    <h2>Clinical Grade Reference</h2>
+    <table>
+      <tr><th>Clinical presentation</th><td>${escapeHtml(S.presentation[i])}</td></tr>
+      <tr><th>Recommended next step</th><td>${escapeHtml(S.intervention[i])}</td></tr>
+      <tr><th>Evidence / context</th><td>${escapeHtml(S.evidence[i])}</td></tr>
+    </table>
+    <h2>Grad-CAM++ Visual Explanation</h2>
+    <div class="pr-imgs">
+      <figure><img src="${r.photo}" alt="Foto"><figcaption>Foto</figcaption></figure>
+      <figure><img src="${r.heatmap}" alt="Peta aktivasi"><figcaption>Peta aktivasi</figcaption></figure>
+      <figure><img src="${r.overlay}" alt="Overlay"><figcaption>Overlay + kontur</figcaption></figure>
+    </div>
+    <p class="pr-disclaimer"><strong>Important:</strong> This is an AI screening result, not a medical diagnosis. Clinical assessment by a licensed healthcare professional is required.</p>
+    <div class="pr-footer">ULCARE — TIM WISPO 3, SMA Brawijaya Smart School &middot; Model ${MODEL_NAME} (${MODEL_SIZE})</div>
+  `;
+}
+function printReport() {
+  if (!state.result) return;
+  $('print-report').innerHTML = buildReportHTML();
+  window.print();
+}
+async function downloadReport() {
+  if (!state.result) return;
+  if (!(window.jspdf && window.jspdf.jsPDF) || !window.html2canvas) {
+    notify(t('failedT'), t('pdfFailed'), WARN);
+    return;
+  }
+  const el = $('print-report');
+  el.innerHTML = buildReportHTML();
+  el.classList.add('pr-render');          // render the report off-screen at a fixed width so the PDF looks the same every time
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    await doc.html(el, {
+      margin: [36, 36, 36, 36],
+      autoPaging: 'text',
+      width: 523,              // ~A4 width in pt (595) minus left/right margins
+      windowWidth: 760,        // matches #print-report.pr-render's fixed width
+      html2canvas: { scale: 0.75, useCORS: true },
+    });
+    doc.save('ulcare-screening-summary.pdf');
+  } catch (err) {
+    notify(t('failedT'), t('pdfFailed'), WARN);
+  } finally {
+    el.classList.remove('pr-render');
+  }
+}
+function downloadFigure() {
+  if (!state.result || !state.result.figure) return;
+  fetch(state.result.figure).then((r) => r.blob()).then((blob) => {
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = 'ulcare-gradcam-plusplus.png'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  });
+}
+/* ---------- Streamlit component protocol ---------- */
+function send(type, data) { window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type }, data || {}), '*'); }
+/* The host iframe is kept pinned to the real browser viewport height (not the taller full-content
+   height) on purpose: the mobile sidebar and its backdrop use position:fixed, which is only reliably
+   "stuck to the screen" while the user scrolls when the iframe IS the viewport. If the iframe were
+   instead auto-grown to the full page's content height, those overlays would scroll away with the rest
+   of the content instead of staying put. Scrolling therefore has to happen *inside* this document
+   (html/body — see the CSS above) rather than on the outer Streamlit page. */
+function reportFrame() {
+  send('streamlit:setFrameHeight', { height: window.innerHeight || 600 });
+}
+window.addEventListener('message', (ev) => {
+  const d = ev.data; if (!d || d.type !== 'streamlit:render') return;
+  const r = d.args && d.args.result; if (!r || !r.id) return;
+  if (r.action !== 'predict' || r.id !== state.reqId || r.id === state.applied) return;
+  state.applied = r.id; cancelRequest(); if (r.error) { notify(t('failedT'), r.error, WARN); return; }
+  state.result = r; renderResult(); revealResults();
+});
+function wireDrop(id, handler) {
+  const zone = $(id);
+  if (!zone) return;
+  ['dragenter', 'dragover'].forEach((n) => zone.addEventListener(n, (e) => { e.preventDefault(); zone.classList.add('dragover'); }));
+  ['dragleave', 'drop'].forEach((n) => zone.addEventListener(n, (e) => { e.preventDefault(); zone.classList.remove('dragover'); }));
+  zone.addEventListener('drop', (e) => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) handler(f); });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  indexDom();
+  applyLang();
+  wireSidebar();
+  wireDrop('hero-drop-zone', (f) => takeFile(f, true));
+  wireDrop('drop-zone', (f) => takeFile(f, false));
+});
+window.addEventListener('load', () => {
+  send('streamlit:componentReady', { apiVersion: 1 });
+  reportFrame();
+  // Viewport height can change (mobile keyboard, device rotation, browser chrome showing/hiding) —
+  // keep the host iframe in sync so it never drifts out of step with the real viewport.
+  window.addEventListener('resize', reportFrame);
+  window.addEventListener('orientationchange', reportFrame);
+});
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
