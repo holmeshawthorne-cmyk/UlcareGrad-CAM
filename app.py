@@ -38,7 +38,7 @@ st.markdown(
     <style>
         #MainMenu, header[data-testid="stHeader"], footer { visibility: hidden; height: 0; }
         div.block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
-        iframe[title="ulcare_app.ulcare_app"] {
+        iframe[title="ulcare_app"] {
             position: fixed !important;
             top: 0; left: 0;
             width: 100vw !important;
@@ -107,9 +107,7 @@ def main():
                 payload = run_prediction(model, pil_img)
                 result = {"id": req_id, "action": "predict", **payload}
             except Exception:
-                # Full traceback goes to the server log (st.exception), only a short
-                # message goes to the UI via index.html's existing error notification.
-                st.exception(traceback.format_exc())
+                traceback.print_exc()  # tampil di terminal / Manage app > Logs
                 result = {
                     "id": req_id,
                     "action": "predict",
