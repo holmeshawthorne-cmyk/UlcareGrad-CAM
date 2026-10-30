@@ -206,6 +206,7 @@ def make_gradcam_plusplus(model, pil_img, class_idx):
     cam = cam / max_val if max_val > 0 else cam
     return cv2.resize(cam.astype("float32"), (size[1], size[0]))
 
+
 def heatmap_to_rgb(heatmap):
     """Jet colormap version of the heatmap (the 'Peta aktivasi' panel)."""
     heat_u8 = np.uint8(255 * heatmap)
