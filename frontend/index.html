@@ -63,17 +63,17 @@ function avatarFallback(img) {
            just get silently clipped with no way to reach it. */
         html {
             margin: 0;
-            height: 100%;
+            min-height: 100%;
+            height: auto;
             overflow-x: hidden;
             overflow-y: auto;
-            overscroll-behavior-y: contain;
-            -webkit-overflow-scrolling: touch;
-            -webkit-text-size-adjust: 100%;
+            scroll-behavior: smooth;
         }
         body {
             margin: 0;
-            min-height: 100%;
-            overflow-x: hidden;
+            min-height: 100vh;
+            height: auto;
+            overflow: visible;
         }
         .gradcam-legend { background: linear-gradient(90deg,#00007f,#0000ff,#00ffff,#ffff00,#ff0000,#7f0000); }
         /* Report template: shared by the Print button (window.print) and the Download button (jsPDF render). Hidden by default. */
