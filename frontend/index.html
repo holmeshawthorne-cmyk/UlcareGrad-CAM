@@ -63,17 +63,17 @@ function avatarFallback(img) {
            just get silently clipped with no way to reach it. */
         html {
             margin: 0;
-            min-height: 100%;
-            height: auto;
-            overflow-x: hidden;
-            overflow-y: auto;
-            scroll-behavior: smooth;
+            height: 100%;
+            overflow: hidden;              /* the viewport itself never scrolls: Streamlit renders this iframe with scrolling="no" */
+            -webkit-text-size-adjust: 100%;
         }
         body {
             margin: 0;
-            min-height: 100vh;
-            height: auto;
-            overflow: visible;
+            height: 100%;                  /* body is the scroll container instead (element scrolling works inside the iframe) */
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
         }
         .gradcam-legend { background: linear-gradient(90deg,#00007f,#0000ff,#00ffff,#ffff00,#ff0000,#7f0000); }
         /* Report template: shared by the Print button (window.print) and the Download button (jsPDF render). Hidden by default. */
@@ -946,7 +946,7 @@ function openSidebar() {
   $('mobile-sidebar').classList.add('is-open'); $('mobile-sidebar').setAttribute('aria-hidden', 'false');
   $('sidebar-backdrop').classList.add('is-open');
   $('mobile-menu-button').setAttribute('aria-expanded', 'true');
-  document.documentElement.style.overflow = 'hidden';          // lock page scroll behind the drawer
+  document.body.style.overflowY = 'hidden';          // lock page scroll behind the drawer
   setTimeout(() => { const c = $('sidebar-close'); if (c) c.focus({ preventScroll: true }); }, 60);
 }
 function closeSidebar(silent) {
@@ -955,7 +955,7 @@ function closeSidebar(silent) {
   $('mobile-sidebar').classList.remove('is-open'); $('mobile-sidebar').setAttribute('aria-hidden', 'true');
   $('sidebar-backdrop').classList.remove('is-open');
   $('mobile-menu-button').setAttribute('aria-expanded', 'false');
-  document.documentElement.style.overflow = '';
+  document.body.style.overflowY = '';
   if (!silent && sidebarReturnFocus && sidebarReturnFocus.focus) sidebarReturnFocus.focus({ preventScroll: true });
 }
 function wireSidebar() {
@@ -1204,6 +1204,7 @@ function send(type, data) { window.parent.postMessage(Object.assign({ isStreamli
 function reportFrame() {
   try {
     const f = window.frameElement;
+    if (f) f.setAttribute('scrolling', 'yes');
     if (f) f.style.cssText += ';position:fixed!important;top:0;left:0;width:100vw!important;height:100dvh!important;border:0';
   } catch (e) {}
   const h = (window.parent && window.parent.innerHeight) || window.innerHeight || 600;
