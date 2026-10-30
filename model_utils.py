@@ -141,52 +141,70 @@ def predict_with_tta(model, pil_img):
     return probs_by_stage * 100.0, stage
 
 
+def _make_cam_fn(model):
+    """Return fn(x) -> (conv_out, preds). Works with nested backbones (MobileNetV2, etc.)."""
+    Conv2D = tf.keras.layers.Conv2D
+
+    if CONV_LAYER_NAME:
+        m = tf.keras.Model(model.inputs, [model.get_layer(CONV_LAYER_NAME).output, model.output])
+        return lambda x: m(x, training=False)
+
+    # Case 1: Conv2D langsung di level atas model
+    for layer in reversed(model.layers):
+        if isinstance(layer, Conv2D):
+            m = tf.keras.Model(model.inputs, [layer.output, model.output])
+            return lambda x: m(x, training=False)
+
+    # Case 2: Conv2D ada di dalam backbone (sub-model)
+    for i in range(len(model.layers) - 1, -1, -1):
+        sub = model.layers[i]
+        if isinstance(sub, tf.keras.Model):
+            conv = next((l for l in reversed(sub.layers) if isinstance(l, Conv2D)), None)
+            if conv is None:
+                continue
+            inner = tf.keras.Model(sub.inputs, [conv.output, sub.output])
+            pre = [l for l in model.layers[:i] if not isinstance(l, tf.keras.layers.InputLayer)]
+            head = list(model.layers[i + 1:])
+
+            def fn(x, pre=pre, inner=inner, head=head):
+                for l in pre:
+                    x = l(x)
+                conv_out, y = inner(x, training=False)
+                for l in head:
+                    y = l(y)
+                return conv_out, y
+            return fn
+
+    raise ValueError(
+        "Conv2D layer tidak ditemukan. Isi CONV_LAYER_NAME di model_utils.py "
+        "(lihat nama layer di model.summary())."
+    )
+
+
 def make_gradcam_plusplus(model, pil_img, class_idx):
-    """Returns a (H, W) heatmap in [0, 1], sized to the model's input resolution."""
+    """Grad-CAM++ (orde-1, formula Chattopadhay et al.). Returns (H, W) in [0, 1]."""
     size = get_input_size(model)
-    img_array = preprocess_image(pil_img, size)
-    target = _grad_target(model)
-    grad_model = tf.keras.Model(model.inputs, [target, model.output])
+    x = tf.convert_to_tensor(preprocess_image(pil_img, size))
+    fn = _make_cam_fn(model)
+    model_class_idx = STAGE_ORDER.index(class_idx)
 
-    img_tensor = tf.convert_to_tensor(img_array)
-    with tf.GradientTape() as tape1:
-        with tf.GradientTape() as tape2:
-            with tf.GradientTape() as tape3:
-                conv_out, preds = grad_model(img_tensor, training=False)
-                # STAGE_ORDER maps model-output-index -> stage; invert it to get back
-                # the model's own class index for the stage we want to explain.
-                model_class_idx = STAGE_ORDER.index(class_idx)
-                score = preds[:, model_class_idx]
-            grads1 = tape3.gradient(score, conv_out)
-        grads2 = tape2.gradient(grads1, conv_out)
-    grads3 = tape1.gradient(grads2, conv_out)
+    with tf.GradientTape() as tape:
+        conv_out, preds = fn(x)
+        score = preds[:, model_class_idx]
+    grads = tape.gradient(score, conv_out)
 
-    conv_out = conv_out[0].numpy()
-    grads1 = grads1[0].numpy()
-    grads2 = grads2[0].numpy()
-    grads3 = grads3[0].numpy()
+    A = conv_out[0].numpy()
+    g = grads[0].numpy()
+    g2, g3 = g ** 2, g ** 3
+    denom = 2.0 * g2 + A.sum(axis=(0, 1)) * g3
+    denom = np.where(denom != 0.0, denom, 1.0)
+    alpha = g2 / denom
+    weights = (alpha * np.maximum(g, 0.0)).sum(axis=(0, 1))
 
-    global_sum = conv_out.reshape((-1, conv_out.shape[-1])).sum(axis=0)
-
-    alpha_num = grads2
-    alpha_denom = grads2 * 2.0 + grads3 * global_sum.reshape((1, 1, -1))
-    alpha_denom = np.where(alpha_denom != 0.0, alpha_denom, np.ones_like(alpha_denom))
-    alphas = alpha_num / alpha_denom
-
-    alpha_norm = np.sum(alphas, axis=(0, 1))
-    alpha_norm = np.where(alpha_norm != 0.0, alpha_norm, np.ones_like(alpha_norm))
-    alphas = alphas / alpha_norm.reshape((1, 1, -1))
-
-    weights = np.maximum(grads1, 0.0)
-    deep_weights = np.sum((weights * alphas).reshape((-1, conv_out.shape[-1])), axis=0)
-
-    cam = np.sum(deep_weights * conv_out, axis=-1)
-    cam = np.maximum(cam, 0.0)
+    cam = np.maximum((weights * A).sum(axis=-1), 0.0)
     max_val = cam.max()
     cam = cam / max_val if max_val > 0 else cam
-    cam = cv2.resize(cam, (size[1], size[0]))
-    return cam
-
+    return cv2.resize(cam.astype("float32"), (size[1], size[0]))
 
 def heatmap_to_rgb(heatmap):
     """Jet colormap version of the heatmap (the 'Peta aktivasi' panel)."""
