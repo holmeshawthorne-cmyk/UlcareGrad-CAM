@@ -1202,7 +1202,12 @@ function send(type, data) { window.parent.postMessage(Object.assign({ isStreamli
    of the content instead of staying put. Scrolling therefore has to happen *inside* this document
    (html/body — see the CSS above) rather than on the outer Streamlit page. */
 function reportFrame() {
-  send('streamlit:setFrameHeight', { height: window.innerHeight || 600 });
+  try {
+    const f = window.frameElement;
+    if (f) f.style.cssText += ';position:fixed!important;top:0;left:0;width:100vw!important;height:100dvh!important;border:0';
+  } catch (e) {}
+  const h = (window.parent && window.parent.innerHeight) || window.innerHeight || 600;
+  send('streamlit:setFrameHeight', { height: h });
 }
 window.addEventListener('message', (ev) => {
   const d = ev.data; if (!d || d.type !== 'streamlit:render') return;
