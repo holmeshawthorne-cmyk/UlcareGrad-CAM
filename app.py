@@ -38,7 +38,7 @@ st.markdown(
     <style>
         #MainMenu, header[data-testid="stHeader"], footer { visibility: hidden; height: 0; }
         div.block-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
-        iframe[title="ulcare_app"] {
+        iframe[title*="ulcare_app"] {
             position: fixed !important;
             top: 0; left: 0;
             width: 100vw !important;
