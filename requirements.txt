@@ -1,6 +1,6 @@
-streamlit>=1.38,<2.0
-tensorflow-cpu>=2.15,<2.19
-numpy<2.0
-pillow>=10.0
-opencv-python-headless>=4.9
-matplotlib>=3.8
+streamlit
+tensorflow-cpu
+numpy
+pillow
+opencv-python-headless
+matplotlib
