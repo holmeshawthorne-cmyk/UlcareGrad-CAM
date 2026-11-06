@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ULCARE - AI Diabetic Foot Ulcer Screening System</title>
+    <!-- Favicon / tab icon: teal ULCARE mark, generated from the brand logo -->
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/logo/favicon-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/logo/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="assets/logo/favicon-48.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/logo/favicon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/logo/favicon-180.png">
+    <link rel="shortcut icon" href="assets/logo/favicon-32.png">
     <script>
 function avatarFallback(img) {
   img.onerror = null;
@@ -82,6 +89,7 @@ function avatarFallback(img) {
         #print-report .pr-header { display:flex; justify-content:space-between; align-items:flex-start; gap: 6mm; border-bottom:3px solid #0d9488; padding-bottom:4mm; margin-bottom:6mm; }
         #print-report .pr-logo { font-size:18pt; font-weight:800; color:#0f172a; }
         #print-report .pr-logo span { color:#0d9488; }
+        #print-report .pr-logo-img { height:11mm; width:auto; display:block; }
         #print-report .pr-tag { display:block; font-size:8pt; color:#64748b; font-weight:600; letter-spacing:.02em; margin-top:1mm; }
         #print-report .pr-meta { font-size:8.5pt; color:#64748b; text-align:right; line-height:1.5; white-space:nowrap; }
         #print-report h1 { font-size:18pt; margin:0 0 2mm; color:#0f172a; }
@@ -159,9 +167,7 @@ function avatarFallback(img) {
                 </button>
                 <!-- Brand Logo & Title -->
                 <div class="flex items-center space-x-2 sm:space-x-3 cursor-pointer min-w-0" onclick="switchTab('dashboard')">
-                    <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-tr from-teal-600 via-teal-500 to-sky-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20 flex-shrink-0">
-                        <i class="fa-solid fa-notes-medical text-xl sm:text-2xl"></i>
-                    </div>
+                    <img src="assets/logo/ulcare-icon.png" alt="ULCARE" class="w-10 h-10 sm:w-12 sm:h-12 object-contain flex-shrink-0 drop-shadow-sm">
                     <div class="min-w-0">
                         <div class="flex items-center space-x-2">
                             <span class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900">UL<span class="text-teal-600">CARE</span></span>
@@ -208,9 +214,7 @@ function avatarFallback(img) {
     <aside id="mobile-sidebar" class="mobile-sidebar" role="dialog" aria-modal="true" aria-label="Menu" aria-hidden="true">
         <div class="flex items-center justify-between gap-3 px-4 h-16 border-b border-slate-200 flex-shrink-0">
             <div class="flex items-center space-x-3 min-w-0">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 via-teal-500 to-sky-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20 flex-shrink-0">
-                    <i class="fa-solid fa-notes-medical text-xl"></i>
-                </div>
+                <img src="assets/logo/ulcare-icon.png" alt="ULCARE" class="w-10 h-10 object-contain flex-shrink-0">
                 <span class="text-xl font-extrabold tracking-tight text-slate-900">UL<span class="text-teal-600">CARE</span></span>
             </div>
             <button id="sidebar-close" type="button" onclick="closeSidebar()" aria-label="Menu" class="mobile-menu-button inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 flex-shrink-0">
@@ -577,6 +581,7 @@ function avatarFallback(img) {
             <!-- Team Hero Banner -->
             <div class="bg-gradient-to-r from-teal-900 via-teal-800 to-sky-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
                 <div class="absolute -right-10 -bottom-10 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <img src="assets/logo/ulcare-icon.png" alt="" aria-hidden="true" class="absolute -right-6 -bottom-8 w-56 h-56 object-contain opacity-10 pointer-events-none select-none">
                 <div class="relative z-10 max-w-2xl">
                     <span class="bg-teal-500/30 text-teal-200 text-xs font-semibold px-3 py-1 rounded-full border border-teal-400/30 uppercase tracking-wider">Research Team Profile</span>
                     <h1 class="text-3xl sm:text-4xl font-extrabold mt-3 tracking-tight">TIM WISPO 3</h1>
@@ -638,6 +643,17 @@ function avatarFallback(img) {
         </div>
 
     </main>
+
+    <footer class="border-t border-slate-200 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <img src="assets/logo/ulcare-wordmark.png" alt="ULCARE - Ulcers Care" class="h-7 sm:h-8 w-auto object-contain">
+            <p class="text-xs text-slate-500 text-center sm:text-right leading-relaxed">
+                AI Diabetic Foot Ulcer Screening System &middot; TIM WISPO 3, SMA Brawijaya Smart School<br class="hidden sm:block">
+                For educational screening support only — not a substitute for professional medical diagnosis.
+            </p>
+        </div>
+    </footer>
+
     <article id="print-report" aria-hidden="true"></article>
 
     <!-- Notification Modal -->
@@ -1126,7 +1142,7 @@ function buildReportHTML() {
   }).join('');
   return `
     <div class="pr-header">
-      <div><div class="pr-logo">UL<span>CARE</span></div><div class="pr-tag">AI DIABETIC FOOT ULCER SCREENING SYSTEM</div></div>
+      <div><img src="assets/logo/ulcare-logo-full.png" alt="ULCARE" class="pr-logo-img"><div class="pr-tag">AI DIABETIC FOOT ULCER SCREENING SYSTEM</div></div>
       <div class="pr-meta">Generated: ${new Date().toLocaleString()}<br>Model: ${MODEL_NAME} · ${MODEL_SIZE}</div>
     </div>
     <h1>ULCARE Screening Summary</h1>
