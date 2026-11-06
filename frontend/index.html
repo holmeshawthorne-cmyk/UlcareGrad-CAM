@@ -134,7 +134,6 @@ function avatarFallback(img) {
         .side-item.is-active { color: #0f766e; background: #f0fdfa; box-shadow: inset 3px 0 0 #14b8a6; }
         .side-item.is-active i { color: #0d9488; }
         @media (min-width: 1024px) { .mobile-sidebar, .sidebar-backdrop { display: none !important; } }
-        @media (max-width: 1279px) { .brand-version, .brand-subtitle { display: none; } }
         /* Anchors never hide under the sticky header. */
         #results-section, #photo-upload-guide { scroll-margin-top: 84px; }
         .xai-cbar { background: linear-gradient(90deg, #00007f, #0000ff, #00ffff, #ffff00, #ff0000, #7f0000); }
@@ -166,12 +165,8 @@ function avatarFallback(img) {
                     <i class="fa-solid fa-bars text-lg"></i>
                 </button>
                 <!-- Brand Logo & Title -->
-                <div class="flex items-center space-x-2 sm:space-x-3 cursor-pointer min-w-0" onclick="switchTab('dashboard')">
+                <div class="flex items-center min-w-0 cursor-pointer" onclick="switchTab('dashboard')">
                     <img src="assets/logo/ulcare-logo-full.png" alt="ULCARE - Ulcers Care" class="h-9 sm:h-11 w-auto object-contain flex-shrink-0">
-                    <div class="min-w-0">
-                        <span class="brand-version bg-teal-50 text-teal-700 text-xs font-semibold px-2 py-0.5 rounded-full border border-teal-200">v2.4 Clinical System</span>
-                        <p class="brand-subtitle text-xs text-slate-500 font-medium mt-0.5">Diabetic Foot Ulcer (DFU) Screening Tool</p>
-                    </div>
                 </div>
             </div>
 
@@ -1169,6 +1164,18 @@ function printReport() {
   $('print-report').innerHTML = buildReportHTML();
   window.print();
 }
+// Resolves once every <img> inside `container` has either finished loading or failed,
+// so html2canvas never rasterizes a half-loaded photo/heatmap/overlay into the PDF.
+function waitForReportImages(container) {
+  const imgs = Array.from(container.querySelectorAll('img'));
+  return Promise.all(imgs.map((img) => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      img.addEventListener('load', resolve, { once: true });
+      img.addEventListener('error', resolve, { once: true });
+    });
+  }));
+}
 async function downloadReport() {
   if (!state.result) return;
   if (!(window.jspdf && window.jspdf.jsPDF) || !window.html2canvas) {
@@ -1179,15 +1186,33 @@ async function downloadReport() {
   el.innerHTML = buildReportHTML();
   el.classList.add('pr-render');          // render the report off-screen at a fixed width so the PDF looks the same every time
   try {
+    await waitForReportImages(el);
+    // Let the browser finish layout/paint of the just-injected markup before snapshotting it.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Rasterize the EXACT same markup/CSS used by the Print button, then place that
+    // image into the PDF ourselves — jsPDF's built-in doc.html() renderer was producing
+    // a blank page for this layout, so we drive html2canvas directly instead.
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    await doc.html(el, {
-      margin: [36, 36, 36, 36],
-      autoPaging: 'text',
-      width: 523,              // ~A4 width in pt (595) minus left/right margins
-      windowWidth: 760,        // matches #print-report.pr-render's fixed width
-      html2canvas: { scale: 0.75, useCORS: true },
-    });
+    const margin = 24;
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const usableW = pageW - margin * 2;
+    const usableH = pageH - margin * 2;
+    const imgW = usableW;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    let heightLeft = imgH;
+    let position = margin;
+    doc.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
+    heightLeft -= usableH;
+    while (heightLeft > 0) {              // slice across extra A4 pages if the report is tall
+      position = heightLeft - imgH + margin;
+      doc.addPage();
+      doc.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
+      heightLeft -= usableH;
+    }
     doc.save('ulcare-screening-summary.pdf');
   } catch (err) {
     notify(t('failedT'), t('pdfFailed'), WARN);
