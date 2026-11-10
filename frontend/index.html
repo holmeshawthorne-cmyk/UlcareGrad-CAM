@@ -402,6 +402,11 @@ function avatarFallback(img) {
                     </button>
                 </div>
 
+                <div class="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-amber-900">
+                    <i class="fa-solid fa-circle-info text-amber-600 mt-0.5"></i>
+                    <p data-t="scope-note" class="text-xs leading-relaxed"></p>
+                </div>
+
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     <!-- Left: Upload & Input Panel -->
                     <div class="lg:col-span-5 space-y-6">
@@ -474,8 +479,6 @@ function avatarFallback(img) {
                                 <section class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
                                     <h4 class="text-sm font-bold text-slate-900 flex items-center"><span class="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center mr-2"><i class="fa-solid fa-arrow-trend-up"></i></span><span id="stage-reason-title" data-dyn></span></h4>
                                     <p id="finding-reason" data-dyn class="mt-4 text-sm text-slate-600 leading-relaxed"></p>
-                                    <p id="finding-limit" data-dyn class="mt-3 text-xs text-slate-500 leading-relaxed"></p>
-                                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-start text-xs font-semibold text-teal-700"><i class="fa-solid fa-circle-info mr-2 mt-0.5"></i><span data-t="gradcam-note"></span></div>
                                 </section>
                                 <section class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
                                     <h4 class="text-sm font-bold text-slate-900 flex items-center mb-4"><span class="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center mr-2"><i class="fa-solid fa-chart-simple"></i></span><span class="leading-tight">Probabilitas setiap stage<span id="prob-note" data-dyn class="block text-[10px] font-semibold text-slate-400 mt-0.5"></span></span></h4>
@@ -483,8 +486,16 @@ function avatarFallback(img) {
                                     <p data-t="prob-model-note" class="mt-4 text-[11px] text-slate-400 leading-relaxed"></p>
                                 </section>
                                 <section class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs xl:col-span-2">
-                                    <h4 id="clinical-details-title" data-dyn class="text-sm font-bold text-slate-900"></h4>
-                                    <p id="clinical-intervention" class="mt-2 text-xs leading-relaxed text-slate-600"></p>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div>
+                                            <h4 id="clinical-details-title" data-dyn class="text-sm font-bold text-slate-900"></h4>
+                                            <p id="clinical-intervention" class="mt-2 text-xs leading-relaxed text-slate-600"></p>
+                                        </div>
+                                        <div class="md:border-l md:border-slate-100 md:pl-5">
+                                            <h4 id="photo-limit-label" data-dyn class="text-sm font-bold text-slate-900"></h4>
+                                            <p id="photo-limit" data-dyn class="mt-2 text-xs leading-relaxed text-slate-600"></p>
+                                        </div>
+                                    </div>
                                 </section>
                             </div>
 
@@ -517,6 +528,7 @@ function avatarFallback(img) {
                                     </figure>
                                 </div>
                                 <p data-t="gradcam-caption" class="mt-4 text-xs text-slate-500 leading-relaxed"></p>
+                                <div class="mt-3 flex items-start rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2 text-xs font-semibold leading-relaxed text-teal-800"><i class="fa-solid fa-circle-info mr-2 mt-0.5"></i><span data-t="gradcam-note"></span></div>
                                 <p class="mt-2 text-[11px] text-slate-400 leading-relaxed">Foto ditampilkan sesuai masukan model (persegi 224×224). Kontur putih putus-putus menandai area ≥50% aktivasi, kontur hitam area ≥75%.</p>
                                 <button type="button" onclick="downloadFigure()" class="mt-3 w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all inline-flex items-center justify-center"><i class="fa-solid fa-image mr-2"></i>Unduh Figur Grad-CAM++ (PNG)</button>
                             </div>
@@ -802,8 +814,10 @@ const HT = {
     'ULCARE is an educational prototype, not a medical diagnostic tool. These results do not replace examination by a qualified healthcare professional.'],
   'gradcam-note': ['Area yang disorot Grad-CAM++ adalah area yang paling memengaruhi keputusan <strong>model</strong> (aktivasi model), <strong>bukan</strong> penanda luka yang divalidasi secara klinis. Grad-CAM++ tidak dapat memverifikasi stage luka secara mandiri.',
     'Areas highlighted by Grad-CAM++ are those that most influenced the <strong>model’s</strong> decision (model activation), <strong>not</strong> clinically validated wound markers. Grad-CAM++ cannot independently verify a wound stage.'],
-  'gradcam-caption': ['Warna hangat (merah–kuning) menandai area foto yang paling memengaruhi keputusan model. Ini bukan batas atau penanda luka yang divalidasi klinis.',
-    'Warm colors (red–yellow) mark the parts of the photo that most influenced the model’s decision. They are not clinically validated wound borders or markers.'],
+  'gradcam-caption': ['Warna hangat (merah–kuning) menandai area foto yang paling memengaruhi keputusan model.',
+    'Warm colors (red–yellow) mark the parts of the photo that most influenced the model’s decision.'],
+  'scope-note': ['<strong>Sebelum mengunggah:</strong> model ini mengklasifikasikan seluruh foto ke salah satu dari lima stage Wagner (0–4). Model tidak menilai perfusi (aliran darah), sensasi saraf, maupun infeksi, karena hal-hal tersebut tidak dapat ditentukan dari foto dan memerlukan pemeriksaan langsung oleh tenaga medis.',
+    '<strong>Before you upload:</strong> this model classifies the whole photo into one of five Wagner stages (0–4). It does not assess perfusion (blood flow), nerve sensation, or infection, because these cannot be determined from a photograph and require in-person examination by a medical professional.'],
   'prob-model-note': ['Angka ini adalah skor keluaran model (softmax), bukan probabilitas klinis yang terkalibrasi; kalibrasi belum diuji.',
     'These figures are model output scores (softmax), not calibrated clinical probabilities; calibration has not been tested.'],
   'edu-disclaimer': ['Aplikasi AI ULCARE adalah alat bantu (<strong>SUPPORT tool</strong>) untuk skrining awal dan pemantauan mandiri. Alat ini <strong>BUKAN diagnosis resmi medis</strong>. Hasil skrining tidak menggantikan pemeriksaan fisik langsung oleh dokter, bedah vaskular, atau spesialis perawatan luka.',
@@ -856,7 +870,7 @@ const D = {
     analyze: 'Jalankan Analisis Stage AI', busy: 'Menganalisis model & Grad-CAM…', busySlow: 'Memuat model (pertama kali lebih lama)…',
     reasonTitle: (n) => `Mengapa diprediksi Stage ${n}?`,
     reasonBody: (n, cues) => `Model AI kami mendeteksi pola visual yang mirip dengan ciri Stage ${n} dalam literatur klasifikasi Wagner, seperti ${cues}. Ini mengarah pada kemungkinan Stage ${n}, bukan kepastian.`,
-    limitBody: (lim) => `Perlu diketahui: model mengklasifikasikan seluruh foto ke salah satu dari lima stage dan tidak menilai perfusi, sensasi saraf, maupun infeksi. ${lim}`,
+    limitLabel: (n) => `Keterbatasan foto untuk Stage ${n}`,
     stageDesc: (n, name) => `Model memprediksi Stage ${n} (${name}) berdasarkan area visual yang paling berkontribusi pada keputusan.`,
     notifTitle: 'Notifikasi', needImageT: 'Gambar Diperlukan', needImage: 'Unggah foto luka terlebih dahulu sebelum menjalankan analisis AI.',
     badImageT: 'Gambar Tidak Valid', badImage: 'Berkas tidak dapat dibaca. Gunakan foto JPG atau PNG.',
@@ -870,7 +884,7 @@ const D = {
     analyze: 'Run AI Stage Analysis', busy: 'Analyzing model & Grad-CAM…', busySlow: 'Loading model (first run takes longer)…',
     reasonTitle: (n) => `Why was Stage ${n} predicted?`,
     reasonBody: (n, cues) => `Our AI model detects visual patterns similar to features the Wagner classification literature associates with Stage ${n}, such as ${cues}. This points to Stage ${n} as a possibility, not a certainty.`,
-    limitBody: (lim) => `Please note: the model classifies the whole photo into one of five stages and does not assess perfusion, nerve sensation, or infection. ${lim}`,
+    limitLabel: (n) => `Photo limitation for Stage ${n}`,
     stageDesc: (n, name) => `The model predicts Stage ${n} (${name}) based on the visual areas that contributed most to the decision.`,
     notifTitle: 'Notification', needImageT: 'Image Required', needImage: 'Please upload a wound photo before running the AI analysis.',
     badImageT: 'Invalid Image', badImage: 'The file could not be read. Use a JPG or PNG photo.',
@@ -1131,7 +1145,8 @@ function renderResult() {
   $('stage-confidence').textContent = `${conf.toFixed(1)}%`;
   $('stage-reason-title').textContent = t('reasonTitle', s);
   $('finding-reason').textContent = t('reasonBody', s, S.cues[i]);
-  $('finding-limit').textContent = t('limitBody', S.limit[i]);
+  $('photo-limit-label').textContent = t('limitLabel', s);
+  $('photo-limit').textContent = S.limit[i];
   $('stage-probabilities').innerHTML = r.probabilities.map((v, k) => {
     const top = k === s, w = Math.max(0, Math.min(100, v));
     return `<div class="flex items-center gap-2">` +
