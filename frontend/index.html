@@ -468,23 +468,23 @@ function avatarFallback(img) {
                                 </div>
                             </div>
 
+                            <p class="text-[11px] leading-relaxed text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex items-start"><i class="fa-solid fa-circle-info mr-2 mt-0.5 text-slate-400"></i><span data-t="proto-disclaimer"></span></p>
+
                             <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
                                 <section class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
                                     <h4 class="text-sm font-bold text-slate-900 flex items-center"><span class="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center mr-2"><i class="fa-solid fa-arrow-trend-up"></i></span><span id="stage-reason-title" data-dyn></span></h4>
                                     <p id="finding-reason" data-dyn class="mt-4 text-sm text-slate-600 leading-relaxed"></p>
-                                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center text-xs font-semibold text-teal-700"><i class="fa-solid fa-circle-info mr-2"></i>Area yang disorot pada Grad-CAM menjadi dasar prediksi ini.</div>
+                                    <p id="finding-limit" data-dyn class="mt-3 text-xs text-slate-500 leading-relaxed"></p>
+                                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-start text-xs font-semibold text-teal-700"><i class="fa-solid fa-circle-info mr-2 mt-0.5"></i><span data-t="gradcam-note"></span></div>
                                 </section>
                                 <section class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
                                     <h4 class="text-sm font-bold text-slate-900 flex items-center mb-4"><span class="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center mr-2"><i class="fa-solid fa-chart-simple"></i></span><span class="leading-tight">Probabilitas setiap stage<span id="prob-note" data-dyn class="block text-[10px] font-semibold text-slate-400 mt-0.5"></span></span></h4>
                                     <div id="stage-probabilities" data-dyn class="space-y-3 text-xs"></div>
+                                    <p data-t="prob-model-note" class="mt-4 text-[11px] text-slate-400 leading-relaxed"></p>
                                 </section>
                                 <section class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs xl:col-span-2">
                                     <h4 id="clinical-details-title" data-dyn class="text-sm font-bold text-slate-900"></h4>
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 text-xs leading-relaxed">
-                                        <div><strong id="clinical-presentation-label" data-dyn></strong><p id="clinical-presentation" class="mt-1 text-slate-600"></p></div>
-                                        <div><strong id="clinical-intervention-label" data-dyn></strong><p id="clinical-intervention" class="mt-1 text-slate-600"></p></div>
-                                        <div><strong id="clinical-evidence-label" data-dyn></strong><p id="clinical-evidence" class="mt-1 text-slate-600"></p></div>
-                                    </div>
+                                    <p id="clinical-intervention" class="mt-2 text-xs leading-relaxed text-slate-600"></p>
                                 </section>
                             </div>
 
@@ -516,7 +516,7 @@ function avatarFallback(img) {
                                         </div>
                                     </figure>
                                 </div>
-                                <p class="mt-4 text-xs text-slate-500 leading-relaxed">Warna hangat (merah–kuning) menandai area foto yang paling memengaruhi keputusan model. Ini adalah penjelasan visual, bukan batas luka yang dipetakan.</p>
+                                <p data-t="gradcam-caption" class="mt-4 text-xs text-slate-500 leading-relaxed"></p>
                                 <p class="mt-2 text-[11px] text-slate-400 leading-relaxed">Foto ditampilkan sesuai masukan model (persegi 224×224). Kontur putih putus-putus menandai area ≥50% aktivasi, kontur hitam area ≥75%.</p>
                                 <button type="button" onclick="downloadFigure()" class="mt-3 w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all inline-flex items-center justify-center"><i class="fa-solid fa-image mr-2"></i>Unduh Figur Grad-CAM++ (PNG)</button>
                             </div>
@@ -640,7 +640,7 @@ function avatarFallback(img) {
             <img src="assets/logo/ulcare-wordmark.png" alt="ULCARE - Ulcers Care" class="h-7 sm:h-8 w-auto object-contain">
             <p class="text-xs text-slate-500 text-center sm:text-right leading-relaxed">
                 AI Diabetic Foot Ulcer Screening System &middot; TIM WISPO 3, SMA Brawijaya Smart School<br class="hidden sm:block">
-                For educational screening support only — not a substitute for professional medical diagnosis.
+                <span data-t="proto-disclaimer"></span>
             </p>
         </div>
     </footer>
@@ -722,13 +722,11 @@ const PAIRS = [
   ['atau klik untuk memilih berkas (JPG, PNG)', 'or click to browse local files (JPG, PNG)'],
   ['Hapus Gambar', 'Remove Image'],
   ['Keyakinan AI', 'AI Confidence'],
-  ['Area yang disorot pada Grad-CAM menjadi dasar prediksi ini.', 'The areas highlighted in Grad-CAM are the basis of this prediction.'],
   ['Probabilitas setiap stage', 'Probability of each stage'],
   ['Peta Perhatian Grad-CAM', 'Grad-CAM Attention Map'],
   ['Dihasilkan langsung dari model', 'Generated directly by the model'],
   ['Perhatian rendah', 'Low attention'],
   ['Perhatian tinggi', 'High attention'],
-  ['Warna hangat (merah–kuning) menandai area foto yang paling memengaruhi keputusan model. Ini adalah penjelasan visual, bukan batas luka yang dipetakan.', 'Warm colors (red–yellow) mark the parts of the photo that most influenced the model’s decision. This is a visual explanation, not a mapped wound boundary.'],
   ['Saran Klinis', 'Clinical Advice'],
   ['Gunakan hasil ini hanya sebagai skrining. Tindakan yang disarankan ditampilkan berdasarkan Wagner Grade dan tetap harus ditentukan oleh tenaga kesehatan berlisensi.', 'Use this result only for screening. Suggested actions are based on Wagner Grade and must still be determined by a licensed health professional.'],
   ['Cetak Ringkasan Hasil', 'Print Result Summary'],
@@ -800,6 +798,14 @@ const IGNORE = new Set(['html', 'UL', 'CARE', 'TIM WISPO 3', 'Dashboard', '🇮�
 
 /* mixed-markup paragraphs: [Indonesia, English] as HTML */
 const HT = {
+  'proto-disclaimer': ['ULCARE adalah prototipe edukatif, bukan alat diagnosis medis. Hasil ini tidak menggantikan pemeriksaan oleh tenaga kesehatan profesional.',
+    'ULCARE is an educational prototype, not a medical diagnostic tool. These results do not replace examination by a qualified healthcare professional.'],
+  'gradcam-note': ['Area yang disorot Grad-CAM++ adalah area yang paling memengaruhi keputusan <strong>model</strong> (aktivasi model), <strong>bukan</strong> penanda luka yang divalidasi secara klinis. Grad-CAM++ tidak dapat memverifikasi stage luka secara mandiri.',
+    'Areas highlighted by Grad-CAM++ are those that most influenced the <strong>model’s</strong> decision (model activation), <strong>not</strong> clinically validated wound markers. Grad-CAM++ cannot independently verify a wound stage.'],
+  'gradcam-caption': ['Warna hangat (merah–kuning) menandai area foto yang paling memengaruhi keputusan model. Ini bukan batas atau penanda luka yang divalidasi klinis.',
+    'Warm colors (red–yellow) mark the parts of the photo that most influenced the model’s decision. They are not clinically validated wound borders or markers.'],
+  'prob-model-note': ['Angka ini adalah skor keluaran model (softmax), bukan probabilitas klinis yang terkalibrasi; kalibrasi belum diuji.',
+    'These figures are model output scores (softmax), not calibrated clinical probabilities; calibration has not been tested.'],
   'edu-disclaimer': ['Aplikasi AI ULCARE adalah alat bantu (<strong>SUPPORT tool</strong>) untuk skrining awal dan pemantauan mandiri. Alat ini <strong>BUKAN diagnosis resmi medis</strong>. Hasil skrining tidak menggantikan pemeriksaan fisik langsung oleh dokter, bedah vaskular, atau spesialis perawatan luka.',
     'The ULCARE AI application is an aid (<strong>SUPPORT tool</strong>) for early screening and self-monitoring. It is <strong>NOT an official medical diagnosis</strong>. Screening results do not replace a direct physical examination by a doctor, vascular surgeon, or wound care specialist.'],
   'team-intro': ['Pengembang dan peneliti di balik <strong>“ULCARE: Web-Based MobileNetV2 Featuring Grad-CAM for Diabetic Foot Image Classification Across Wagner Grades 0–4”</strong>.',
@@ -849,45 +855,79 @@ const D = {
     xaiTitle: (n, c) => `Prediksi: Wagner Stage ${n} (${c.toFixed(1)}%)`, xaiClass: (n) => `GRADCAM++ untuk kelas: Wagner Stage ${n}`, ttaNote: '(rata-rata TTA)',
     analyze: 'Jalankan Analisis Stage AI', busy: 'Menganalisis model & Grad-CAM…', busySlow: 'Memuat model (pertama kali lebih lama)…',
     reasonTitle: (n) => `Mengapa diprediksi Stage ${n}?`,
+    reasonBody: (n, cues) => `Model AI kami mendeteksi pola visual yang mirip dengan ciri Stage ${n} dalam literatur klasifikasi Wagner, seperti ${cues}. Ini mengarah pada kemungkinan Stage ${n}, bukan kepastian.`,
+    limitBody: (lim) => `Perlu diketahui: model mengklasifikasikan seluruh foto ke salah satu dari lima stage dan tidak menilai perfusi, sensasi saraf, maupun infeksi. ${lim}`,
     stageDesc: (n, name) => `Model memprediksi Stage ${n} (${name}) berdasarkan area visual yang paling berkontribusi pada keputusan.`,
     notifTitle: 'Notifikasi', needImageT: 'Gambar Diperlukan', needImage: 'Unggah foto luka terlebih dahulu sebelum menjalankan analisis AI.',
     badImageT: 'Gambar Tidak Valid', badImage: 'Berkas tidak dapat dibaca. Gunakan foto JPG atau PNG.',
     removedT: 'Gambar Dihapus', removed: 'Gambar telah dihapus. Silakan pilih gambar baru.',
     failedT: 'Analisis Gagal', timeoutT: 'Tidak Ada Respons', timeout: 'Server tidak merespons dalam 2 menit. Periksa terminal Streamlit lalu coba lagi.',
     pdfFailed: 'Pembuatan PDF gagal. Coba gunakan opsi Print sebagai gantinya.',
-    clinicalTitle: 'Rincian grade klinis', clinicalPresentation: 'Gambaran klinis', clinicalIntervention: 'Langkah tindak lanjut', clinicalEvidence: 'Bukti / konteks',
+    clinicalTitle: 'Langkah lanjutan yang disarankan',
   },
   en: {
     xaiTitle: (n, c) => `Prediction: Wagner Stage ${n} (${c.toFixed(1)}%)`, xaiClass: (n) => `GRADCAM++ for class: Wagner Stage ${n}`, ttaNote: '(TTA average)',
     analyze: 'Run AI Stage Analysis', busy: 'Analyzing model & Grad-CAM…', busySlow: 'Loading model (first run takes longer)…',
     reasonTitle: (n) => `Why was Stage ${n} predicted?`,
+    reasonBody: (n, cues) => `Our AI model detects visual patterns similar to features the Wagner classification literature associates with Stage ${n}, such as ${cues}. This points to Stage ${n} as a possibility, not a certainty.`,
+    limitBody: (lim) => `Please note: the model classifies the whole photo into one of five stages and does not assess perfusion, nerve sensation, or infection. ${lim}`,
     stageDesc: (n, name) => `The model predicts Stage ${n} (${name}) based on the visual areas that contributed most to the decision.`,
     notifTitle: 'Notification', needImageT: 'Image Required', needImage: 'Please upload a wound photo before running the AI analysis.',
     badImageT: 'Invalid Image', badImage: 'The file could not be read. Use a JPG or PNG photo.',
     removedT: 'Image Removed', removed: 'The image has been removed. You can now select a new one.',
     failedT: 'Analysis Failed', timeoutT: 'No Response', timeout: 'The server did not respond within 2 minutes. Check the Streamlit terminal and try again.',
     pdfFailed: 'Could not generate the PDF. Please try the Print option instead.',
-    clinicalTitle: 'Clinical grade details', clinicalPresentation: 'Clinical presentation', clinicalIntervention: 'Recommended next step', clinicalEvidence: 'Evidence / context',
+    clinicalTitle: 'Suggested next step',
   },
 };
 const STAGES = [
   { hex:'#10b981', card:'bg-emerald-50/80 border-emerald-200 text-emerald-900', badge:'bg-emerald-200 text-emerald-800', pct:'text-emerald-600',
-    name:['Lesi pra/pasca-ulkus; kulit utuh','Pre-/post-ulcerative lesion; intact skin'],
-    reason:['Peta Grad-CAM menunjukkan area yang dipakai model untuk prediksi, bukan pemeriksaan kedalaman luka.','The Grad-CAM map shows areas used by the model; it does not examine wound depth.'],
-    presentation:['Kulit utuh dengan deformitas, kapalan, atau kemerahan.','Intact skin with deformity, callus, or redness.'], intervention:['Alas kaki offloading, perawatan kapalan, kontrol glikemik, edukasi.','Offloading footwear, callus care, glycaemic control, education.'], evidence:['Pencegahan tekanan dan pemantauan perubahan dini dianjurkan.','Pressure prevention and early-change monitoring are recommended.'] },
+    name:['Lesi pra/pasca-ulkus; kulit utuh','Pre-/post-ulcerative lesion; intact skin'], },
   { hex:'#0ea5e9', card:'bg-sky-50/80 border-sky-200 text-sky-900', badge:'bg-sky-200 text-sky-800', pct:'text-sky-600',
-    name:['Ulkus superfisial (dermis)','Superficial ulcer (dermis)'], reason:['Prediksi visual perlu dikonfirmasi dengan pemeriksaan klinis langsung.','A visual prediction needs confirmation by direct clinical examination.'],
-    presentation:['Ulkus terbatas pada dermis tanpa tendon atau sendi terekspos.','Ulcer limited to dermis without exposed tendon or joint.'], intervention:['Debridement lokal, pengurangan tekanan, balutan lembap sesuai penilaian klinis.','Local debridement, pressure reduction, and moist dressing as clinically assessed.'], evidence:['Waktu sembuh median yang dirujuk: 23 hari.','Referenced median healing time: 23 days.'] },
+    name:['Ulkus superfisial (dermis)','Superficial ulcer (dermis)'], },
   { hex:'#f59e0b', card:'bg-amber-50/80 border-amber-200 text-amber-900', badge:'bg-amber-200 text-amber-800', pct:'text-amber-600',
-    name:['Ulkus dalam','Deep ulcer'], reason:['Grad-CAM adalah alat interpretasi, bukan batas atau kedalaman luka.','Grad-CAM is an interpretation aid, not a wound border or depth measurement.'],
-    presentation:['Ulkus menembus tendon, kapsul, atau tulang tanpa abses.','Ulcer penetrating tendon, capsule, or bone without abscess.'], intervention:['Debridement ekstensif, offloading, skrining infeksi dan perfusi.','Extensive debridement, offloading, infection and perfusion screening.'], evidence:['Waktu sembuh median yang dirujuk: 50 hari.','Referenced median healing time: 50 days.'] },
+    name:['Ulkus dalam','Deep ulcer'], },
   { hex:'#f97316', card:'bg-orange-50/80 border-orange-200 text-orange-900', badge:'bg-orange-200 text-orange-800', pct:'text-orange-600',
-    name:['Infeksi jaringan dalam','Deep tissue infection'], reason:['Temuan ini membutuhkan penilaian profesional segera; model tidak menggantikan pemeriksaan infeksi.','This finding needs prompt professional assessment; the model does not replace infection assessment.'],
-    presentation:['Osteomielitis, abses, atau tenosinovitis.','Osteomyelitis, abscess, or tenosynovitis.'], intervention:['Debridement bedah segera, reseksi tulang bila perlu, antibiotik terarah.','Urgent surgical debridement, bone resection when needed, targeted antibiotics.'], evidence:['Dikelola sebagai kondisi serius oleh tim multidisiplin.','Managed as a serious condition by a multidisciplinary team.'] },
+    name:['Infeksi jaringan dalam','Deep tissue infection'], },
   { hex:'#f43f5e', card:'bg-rose-50/80 border-rose-200 text-rose-900', badge:'bg-rose-200 text-rose-800', pct:'text-rose-600',
-    name:['Gangren lokal (jari/forefoot)','Localized gangrene (toe/forefoot)'], reason:['Segera cari pertolongan medis; prediksi citra tidak dapat menilai perfusi atau kebutuhan amputasi.','Seek urgent medical care; image prediction cannot assess perfusion or the need for amputation.'],
-    presentation:['Gangren parsial pada jari kaki atau forefoot.','Partial gangrene localized to toes or forefoot.'], intervention:['Penilaian revaskularisasi, tindakan digital/partial foot, atau rekonstruksi oleh tim bedah.','Revascularization assessment, digital/partial-foot procedure, or reconstruction by surgical team.'], evidence:['Waktu sembuh median yang dirujuk: 119 hari.','Referenced median healing time: 119 days.'] },
+    name:['Gangren lokal (jari/forefoot)','Localized gangrene (toe/forefoot)'], },
 ];
+const REC = {
+  base:   ['Kami sarankan untuk memeriksakan kondisi ini ke tenaga medis/dokter untuk evaluasi lebih lanjut.',
+           'We recommend having this checked by a medical professional/doctor for further evaluation.'],
+  soon:   ['Kami sarankan untuk segera memeriksakan kondisi ini ke tenaga medis/dokter untuk evaluasi lebih lanjut. Sebaiknya jangan ditunda.',
+           'We recommend having this checked by a medical professional/doctor promptly for further evaluation. It is best not to delay.'],
+  urgent: ['Kami sangat menyarankan untuk segera memeriksakan kondisi ini ke tenaga medis/dokter. Jangan ditunda.',
+           'We strongly recommend having this checked by a medical professional/doctor as soon as possible. Do not delay.'],
+};
+const STAGE_COPY = [
+  { cues:['permukaan kulit yang utuh tanpa gangguan lapisan epitel, dengan penebalan kulit (hiperkeratosis) atau deformitas tertutup',
+          'an intact skin surface without epithelial disruption, with hyperkeratosis or closed deformities'],
+    limit:['Kerusakan jaringan di bawah permukaan dan titik panas termal tidak terlihat pada foto.',
+           'Subsurface tissue breakdown and thermal hot spots are not visible in a photograph.'],
+    intervention: REC.base },
+  { cues:['luka dangkal yang terbatas pada lapisan dermis/epidermis, dengan jaringan granulasi berwarna merah muda/merah',
+          'a shallow wound confined to the dermis/epidermis, with pink/red granulation tissue'],
+    limit:['Membedakan kedalaman luka yang sebenarnya dari maserasi memerlukan pemeriksaan klinis langsung.',
+           'Telling true wound depth apart from maceration requires direct clinical examination.'],
+    intervention: REC.base },
+  { cues:['kehilangan kulit seluruh ketebalan yang memperlihatkan lemak subkutan, tendon, atau kapsul sendi, tanpa abses',
+          'full-thickness skin loss exposing subcutaneous fat, tendon, or joint capsule, without abscess'],
+    limit:['Penetrasi ke kapsul sendi atau saluran sinus dapat tersembunyi di balik tepi luka.',
+           'Joint capsule penetration or sinus tracts can be hidden beneath the wound margins.'],
+    intervention: REC.base },
+  { cues:['invasi jaringan yang dalam, tulang kortikal yang terlihat, atau kumpulan cairan bernanah (purulen)',
+          'deep tissue invasion, visible cortical bone, or purulent fluid collections'],
+    limit:['Osteomielitis sering memerlukan pencitraan atau probing tulang, bukan sekadar pengamatan permukaan.',
+           'Osteomyelitis often requires imaging or bone probing rather than surface inspection.'],
+    intervention: REC.soon },
+  { cues:['area hitam/gelap (eskar), jaringan nekrotik yang mengering, atau mumifikasi jari kaki atau forefoot',
+          'black/dark eschar, desiccated necrotic tissue, or mummification of the toes or forefoot'],
+    limit:['Batas demarkasi dan penyebaran infeksi yang lebih dalam tidak terlihat jelas pada foto.',
+           'Demarcation margins and deeper spread of infection are not clearly visible in a photograph.'],
+    intervention: REC.urgent },
+];
+STAGES.forEach((st, k) => Object.assign(st, STAGE_COPY[k]));
 const li = () => (state.lang === 'en' ? 1 : 0);
 const t = (key, ...args) => { const v = D[state.lang][key]; return typeof v === 'function' ? v(...args) : v; };
 
@@ -1090,7 +1130,8 @@ function renderResult() {
   $('stage-confidence').className = `text-3xl font-black ${S.pct}`;
   $('stage-confidence').textContent = `${conf.toFixed(1)}%`;
   $('stage-reason-title').textContent = t('reasonTitle', s);
-  $('finding-reason').textContent = S.reason[i];
+  $('finding-reason').textContent = t('reasonBody', s, S.cues[i]);
+  $('finding-limit').textContent = t('limitBody', S.limit[i]);
   $('stage-probabilities').innerHTML = r.probabilities.map((v, k) => {
     const top = k === s, w = Math.max(0, Math.min(100, v));
     return `<div class="flex items-center gap-2">` +
@@ -1105,9 +1146,7 @@ function renderResult() {
   $('xai-photo').src = r.photo; $('xai-heat').src = r.heatmap; $('result-img').src = r.overlay;
   $('prob-note').textContent = r.tta ? t('ttaNote') : '';
   $('clinical-details-title').textContent = t('clinicalTitle');
-  $('clinical-presentation-label').textContent = t('clinicalPresentation'); $('clinical-presentation').textContent = S.presentation[i];
-  $('clinical-intervention-label').textContent = t('clinicalIntervention'); $('clinical-intervention').textContent = S.intervention[i];
-  $('clinical-evidence-label').textContent = t('clinicalEvidence'); $('clinical-evidence').textContent = S.evidence[i];
+  $('clinical-intervention').textContent = S.intervention[i];
   $('empty-state').classList.add('hidden');
   $('results-section').classList.remove('hidden');
 }
@@ -1143,11 +1182,10 @@ function buildReportHTML() {
     </table>
     <h2>Probability per Stage</h2>
     <table>${probRows}</table>
-    <h2>Clinical Grade Reference</h2>
+    <p style="font-size:9pt;color:#64748b">${HT['prob-model-note'][i]}</p>
+    <h2>Suggested Next Step</h2>
     <table>
-      <tr><th>Clinical presentation</th><td>${escapeHtml(S.presentation[i])}</td></tr>
-      <tr><th>Recommended next step</th><td>${escapeHtml(S.intervention[i])}</td></tr>
-      <tr><th>Evidence / context</th><td>${escapeHtml(S.evidence[i])}</td></tr>
+      <tr><th>Next step</th><td>${escapeHtml(S.intervention[i])}</td></tr>
     </table>
     <h2>Grad-CAM++ Visual Explanation</h2>
     <div class="pr-imgs">
@@ -1155,7 +1193,8 @@ function buildReportHTML() {
       <figure><img src="${r.heatmap}" alt="Peta aktivasi"><figcaption>Peta aktivasi</figcaption></figure>
       <figure><img src="${r.overlay}" alt="Overlay"><figcaption>Overlay + kontur</figcaption></figure>
     </div>
-    <p class="pr-disclaimer"><strong>Important:</strong> This is an AI screening result, not a medical diagnosis. Clinical assessment by a licensed healthcare professional is required.</p>
+    <p style="font-size:9pt;color:#64748b">${HT['gradcam-note'][i]}</p>
+    <p class="pr-disclaimer">${HT['proto-disclaimer'][i]}</p>
     <div class="pr-footer">ULCARE — TIM WISPO 3, SMA Brawijaya Smart School &middot; Model ${MODEL_NAME} (${MODEL_SIZE})</div>
   `;
 }
